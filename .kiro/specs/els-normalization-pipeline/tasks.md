@@ -58,6 +58,15 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 2.3**
     - **Property 6: Page Number Presence** — For any text block, page_number is a positive integer
     - **Validates: Requirements 2.4**
+  - [ ] 3.4 Write integration tests for text extractor with mocked Textract
+    - Test successful extraction with mocked Textract responses
+    - Test table cell parsing and structure preservation
+    - Test reading order sorting
+    - Test error handling for empty/invalid responses
+  - [ ] 3.5 Create manual AWS test script for text extractor
+    - Script: `scripts/test_extractor_manual.py`
+    - Test with real Textract on California standards PDF
+    - Include environment variable setup instructions
 
 - [ ] 4. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
@@ -75,6 +84,15 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
   - [ ] 5.3 Write property tests for structure detection
     - **Property 8: Confidence Threshold Flagging** — For any element, confidence < 0.7 implies needs_review=True, >= 0.7 implies False
     - **Validates: Requirements 3.4**
+  - [ ] 5.4 Write integration tests for structure detector with mocked Bedrock
+    - Test successful structure detection with mocked LLM responses
+    - Test confidence threshold flagging
+    - Test JSON parsing and retry logic
+    - Test chunking and overlap handling
+  - [ ] 5.5 Create manual AWS test script for structure detector
+    - Script: `scripts/test_detector_manual.py`
+    - Test with real Bedrock on extracted text
+    - Include environment variable setup instructions
 
 - [ ] 6. Implement Hierarchy Parser
   - [ ] 6.1 Implement `parser.py` with `parse_hierarchy()` function
@@ -95,6 +113,15 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 4.5**
     - **Property 12: No Orphaned Indicators** — Every standard has non-null domain; orphans in separate list
     - **Validates: Requirements 4.6**
+  - [ ] 6.4 Write integration tests for hierarchy parser
+    - Test depth normalization for 2, 3, and 4+ level hierarchies
+    - Test Standard_ID generation and determinism
+    - Test orphan detection
+    - Test tree assembly with various input structures
+  - [ ] 6.5 Create manual test script for hierarchy parser
+    - Script: `scripts/test_parser_manual.py`
+    - Test with sample detected elements from various states
+    - Verify Standard_ID format and uniqueness
 
 - [ ] 7. Implement Validator
   - [ ] 7.1 Implement `validator.py` with `validate_record()`, `serialize_record()`, and `deserialize_record()` functions
@@ -116,6 +143,16 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 5.7**
     - **Property 16: Serialization Round Trip** — serialize then deserialize produces equivalent object
     - **Validates: Requirements 5.8**
+  - [ ] 7.4 Write integration tests for validator with mocked S3
+    - Test schema validation with valid and invalid records
+    - Test serialization/deserialization round-trip
+    - Test Standard_ID uniqueness checking
+    - Test S3 storage of validated records
+  - [ ] 7.5 Create manual AWS test script for validator
+    - Script: `scripts/test_validator_manual.py`
+    - Test with real S3 storage
+    - Verify JSON files in processed bucket
+    - Include environment variable setup instructions
 
 - [ ] 8. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
@@ -132,6 +169,16 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
   - [ ] 9.3 Write property tests for embedding generation
     - **Property 17: Embedding Input Text Construction** — Input text contains domain, indicator desc, age band; includes subdomain/strand only when non-null
     - **Validates: Requirements 6.1**
+  - [ ] 9.4 Write integration tests for embedding generator with mocked Bedrock and S3
+    - Test embedding input text construction with various hierarchy depths
+    - Test Bedrock API calls with mocked responses
+    - Test S3 storage of embedding records
+    - Test error handling for API failures
+  - [ ] 9.5 Create manual AWS test script for embedding generator
+    - Script: `scripts/test_embedder_manual.py`
+    - Test with real Bedrock Titan Embed model
+    - Verify embeddings stored in S3 and database
+    - Include environment variable setup instructions
 
 - [ ] 10. Implement Data Access Layer and Query Support
   - [ ] 10.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_state()`
@@ -150,6 +197,16 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 7.3**
     - **Property 20: Query Filter Correctness** — Filtered results match the specified filter values
     - **Validates: Requirements 7.4**
+  - [ ] 10.5 Write integration tests for data access layer with test database
+    - Test database connection and connection pooling
+    - Test CRUD operations for standards, embeddings, recommendations
+    - Test vector similarity search with sample embeddings
+    - Test query filters and pagination
+  - [ ] 10.6 Create manual AWS test script for database operations
+    - Script: `scripts/test_db_manual.py`
+    - Test with real Aurora PostgreSQL cluster
+    - Verify pgvector extension and similarity search
+    - Include database connection setup instructions
 
 - [ ] 11. Implement Recommendation Generator
   - [ ] 11.1 Implement `recommender.py` with `generate_recommendations()` function
@@ -172,6 +229,18 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 8.5**
     - **Property 25: Recommendation State Scoping** — All recommendations reference indicators from requested state only
     - **Validates: Requirements 8.7**
+  - [ ] 11.4 Write integration tests for recommendation generator with mocked Bedrock
+    - Test recommendation generation with mocked LLM responses
+    - Test audience coverage (parent and teacher)
+    - Test actionability checker with various inputs
+    - Test retry logic for non-actionable responses
+    - Test domain/subdomain aggregation
+  - [ ] 11.5 Create manual AWS test script for recommendation generator
+    - Script: `scripts/test_recommender_manual.py`
+    - Test with real Bedrock Claude model
+    - Verify recommendations stored in database
+    - Test with various states and age bands
+    - Include environment variable setup instructions
 
 - [ ] 12. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
@@ -194,6 +263,17 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 9.2**
     - **Property 27: Pipeline Run Counts Invariant** — total_validated <= total_indicators and total_embedded <= total_validated
     - **Validates: Requirements 9.4**
+  - [ ] 13.4 Write integration tests for pipeline orchestrator
+    - Test full pipeline execution with mocked stage functions
+    - Test error handling and partial result preservation
+    - Test stage re-run functionality
+    - Test pipeline status tracking
+  - [ ] 13.5 Create manual AWS test script for full pipeline
+    - Script: `scripts/test_pipeline_manual.py`
+    - Test complete pipeline execution with Step Functions
+    - Monitor execution status and stage transitions
+    - Verify SNS notifications
+    - Include environment variable setup instructions
 
 - [ ] 14. Integration wiring and Lambda handlers
   - [ ] 14.1 Create Lambda handler entry points for each pipeline stage
@@ -206,6 +286,17 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Validate template with `aws cloudformation validate-template`
     - Add a deploy script (`scripts/deploy.sh`) that packages Lambda code and deploys the stack
     - _Requirements: 1.1, 1.3, 7.1, 9.1_
+  - [ ] 14.3 Write end-to-end integration tests
+    - Test complete pipeline with all stages using mocked AWS services
+    - Test error propagation and recovery
+    - Test data flow between stages
+    - Verify final outputs in all storage locations
+  - [ ] 14.4 Create comprehensive AWS deployment and testing guide
+    - Document: `documentation/AWS_TESTING.md`
+    - Include pre-deployment checklist
+    - Step-by-step deployment instructions
+    - Post-deployment verification steps
+    - Troubleshooting guide for common issues
 
 - [ ] 15. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
