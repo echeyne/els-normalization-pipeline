@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ELS Normalization Pipeline Infrastructure"
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS Region for deployment
+
+Resources:
+  # S3 Raw Documents Bucket
+  RawDocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "els-raw-documents-${EnvironmentName}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # IAM Role for Ingester Lambda
+  IngesterLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "els-ingester-lambda-role-${EnvironmentName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3RawBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub "${RawDocumentsBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource: !GetAtt RawDocumentsBucket.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Lambda functions will be added in subsequent tasks
+  # Step Functions state machine will be added in subsequent tasks
+  # Aurora PostgreSQL cluster will be added in subsequent tasks
+
+  # Placeholder for future resources
+  PlaceholderParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/els-pipeline/${EnvironmentName}/placeholder"
+      Type: String
+      Value: "Infrastructure template initialized"
+      Description: Placeholder parameter for ELS pipeline
+
+Outputs:
+  EnvironmentName:
+    Description: Environment name
+    Value: !Ref EnvironmentName
+    Export:
+      Name: !Sub "${AWS::StackName}-EnvironmentName"
+
+  Region:
+    Description: AWS Region
+    Value: !Ref Region
+    Export:
+      Name: !Sub "${AWS::StackName}-Region"
+
+  RawDocumentsBucketName:
+    Description: S3 bucket for raw documents
+    Value: !Ref RawDocumentsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-RawDocumentsBucket"
+
+  RawDocumentsBucketArn:
+    Description: ARN of the raw documents bucket
+    Value: !GetAtt RawDocumentsBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RawDocumentsBucketArn"
+
+  IngesterLambdaRoleArn:
+    Description: ARN of the Ingester Lambda IAM role
+    Value: !GetAtt IngesterLambdaRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-IngesterLambdaRoleArn"

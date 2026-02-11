@@ -1,0 +1,220 @@
+# Implementation Plan: ELS Normalization Pipeline
+
+## Overview
+
+Implement the ELS normalization pipeline as a set of Python modules with AWS Lambda handlers, orchestrated by AWS Step Functions. Each pipeline stage is an independent module with clear interfaces. Testing uses pytest and hypothesis for property-based tests.
+
+## Tasks
+
+- [x] 1. Set up project structure and shared data models
+  - [x] 1.1 Create project directory structure, `pyproject.toml` with dependencies (boto3, hypothesis, pytest, pydantic, psycopg2-binary), and shared configuration module
+    - Directories: `src/els_pipeline/`, `tests/unit/`, `tests/property/`, `tests/integration/`, `infra/`
+    - Shared config: S3 bucket names, Bedrock model IDs, confidence threshold (0.7)
+    - Create base CloudFormation template (`infra/template.yaml`) with parameters for environment name and region
+    - _Requirements: all_
+  - [x] 1.2 Implement core data model classes using Pydantic: `TextBlock`, `DetectedElement`, `HierarchyNode`, `HierarchyLevel`, `NormalizedStandard`, `EmbeddingRecord`, `Recommendation`, `ValidationError`, `PipelineStageResult`, `PipelineRunResult`
+    - Include all fields from the design document's Components and Interfaces section
+    - Use Pydantic validators for field constraints (e.g., confidence in [0.0, 1.0], level enum, audience enum)
+    - _Requirements: 3.2, 3.3, 5.1, 5.2, 5.3, 6.3, 8.3_
+  - [x] 1.3 Write property tests for data model validation
+    - **Property 7: Detected Element Field Validity** — For any detected element, confidence in [0.0, 1.0] and level in valid set
+    - **Validates: Requirements 3.2, 3.3**
+    - **Property 18: Embedding Record Completeness** — For any embedding record, all required fields present
+    - **Validates: Requirements 6.3**
+    - **Property 23: Recommendation Record Completeness** — For any recommendation, all required fields present and valid
+    - **Validates: Requirements 8.3, 8.6**
+
+- [x] 2. Implement Raw Document Ingester
+  - [x] 2.1 Implement `ingester.py` with `ingest_document()` function
+    - Format validation: check file extension against {".pdf", ".html"}, reject others with descriptive error
+    - S3 path construction: `{state}/{year}/{filename}`
+    - Upload to S3 with metadata tags (state, version_year, source_url, publishing_agency, upload_timestamp)
+    - Return `IngestionResult` with s3_key, version_id, metadata, status
+    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+  - [x] 2.2 Add CloudFormation resources for S3 raw bucket (`els-raw-documents`) with versioning enabled and IAM role for the ingester Lambda
+    - _Requirements: 1.1, 1.3_
+  - [x] 2.3 Write property tests for ingester
+    - **Property 1: S3 Path Construction** — For any state/year/filename, path matches `{state}/{year}/{identifier}` pattern
+    - **Validates: Requirements 1.1, 5.5**
+    - **Property 2: Ingestion Metadata Completeness** — For any successful ingestion, all metadata keys present
+    - **Validates: Requirements 1.2**
+    - **Property 3: Format Validation Correctness** — PDF/HTML accepted, all others rejected with error
+    - **Validates: Requirements 1.4**
+
+- [ ] 3. Implement Text Extractor
+  - [ ] 3.1 Implement `extractor.py` with `extract_text()` function
+    - Call AWS Textract (async for large docs, sync for small)
+    - Parse Textract response into `TextBlock` objects preserving block_type, row_index, col_index for table cells
+    - Sort blocks by (page_number, top_position, left_position) for reading order
+    - Record source page number on every block
+    - Handle errors: log failures with document identifiers, return error result for empty output
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+  - [ ] 3.2 Add CloudFormation resources for Text Extractor Lambda with Textract permissions and appropriate timeout/memory for large PDFs
+    - _Requirements: 2.1_
+  - [ ] 3.3 Write property tests for text extraction ordering and structure
+    - **Property 4: Text Block Reading Order** — For any set of blocks with positions, output sorted by (page, top, left)
+    - **Validates: Requirements 2.2**
+    - **Property 5: Table Cell Structure Preservation** — For any TABLE_CELL block, row_index and col_index are non-null and non-negative
+    - **Validates: Requirements 2.3**
+    - **Property 6: Page Number Presence** — For any text block, page_number is a positive integer
+    - **Validates: Requirements 2.4**
+
+- [ ] 4. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 5. Implement Structure Detector
+  - [ ] 5.1 Implement `detector.py` with `detect_structure()` function
+    - Chunk text blocks into ~2000 token groups with overlap
+    - Build structured prompt for Bedrock LLM requesting JSON array of classified elements
+    - Parse LLM response into `DetectedElement` objects
+    - Set `needs_review = True` for elements with confidence < 0.7
+    - Handle malformed LLM JSON responses with retry (up to 2 retries)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [ ] 5.2 Add CloudFormation resources for Structure Detector Lambda with Bedrock invoke permissions
+    - _Requirements: 3.1_
+  - [ ] 5.3 Write property tests for structure detection
+    - **Property 8: Confidence Threshold Flagging** — For any element, confidence < 0.7 implies needs_review=True, >= 0.7 implies False
+    - **Validates: Requirements 3.4**
+
+- [ ] 6. Implement Hierarchy Parser
+  - [ ] 6.1 Implement `parser.py` with `parse_hierarchy()` function
+    - Detect number of distinct hierarchy levels in input elements
+    - Apply depth normalization: 2 levels → Domain+Indicator, 3 → Domain+Subdomain+Indicator, 4+ → all four
+    - Generate deterministic Standard_ID: `{state}-{year}-{domain_code}-{indicator_code}`
+    - Assemble tree and detect orphaned elements (no path to domain)
+    - Normalize all state-specific terminology to canonical levels
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+  - [ ] 6.2 Add CloudFormation resource for Hierarchy Parser Lambda
+    - _Requirements: 4.1_
+  - [ ] 6.3 Write property tests for hierarchy parsing
+    - **Property 9: Canonical Level Normalization** — Output contains only levels from {domain, subdomain, strand, indicator}
+    - **Validates: Requirements 4.1**
+    - **Property 10: Depth-Based Hierarchy Mapping** — For N levels: correct null/non-null pattern per depth
+    - **Validates: Requirements 4.2, 4.3, 4.4**
+    - **Property 11: Standard_ID Determinism** — Same inputs always produce same Standard_ID
+    - **Validates: Requirements 4.5**
+    - **Property 12: No Orphaned Indicators** — Every standard has non-null domain; orphans in separate list
+    - **Validates: Requirements 4.6**
+
+- [ ] 7. Implement Validator
+  - [ ] 7.1 Implement `validator.py` with `validate_record()`, `serialize_record()`, and `deserialize_record()` functions
+    - JSON Schema validation for required fields at all levels (state, document._, standard._, metadata)
+    - Allow null subdomain/strand when hierarchy depth < 4
+    - Collect all validation errors (don't fail on first)
+    - Standard_ID uniqueness check within state+year (accepts a set of existing IDs)
+    - Serialize NormalizedStandard to Canonical_JSON dict, deserialize back with round-trip fidelity
+    - Store valid records to S3 under `{state}/{year}/{standard_id}.json`
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8_
+  - [ ] 7.2 Add CloudFormation resources for Validator Lambda and S3 processed bucket (`els-processed-json`) with versioning
+    - _Requirements: 5.5_
+  - [ ] 7.3 Write property tests for validation
+    - **Property 13: Schema Validation Rejects Invalid Records** — Missing any required field → is_valid=False
+    - **Validates: Requirements 5.1, 5.2, 5.3**
+    - **Property 14: Validation Error Reporting** — Invalid records produce errors with non-empty field_path and message
+    - **Validates: Requirements 5.6**
+    - **Property 15: Standard_ID Uniqueness Enforcement** — Duplicate IDs within state+year detected
+    - **Validates: Requirements 5.7**
+    - **Property 16: Serialization Round Trip** — serialize then deserialize produces equivalent object
+    - **Validates: Requirements 5.8**
+
+- [ ] 8. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 9. Implement Embedding Generator
+  - [ ] 9.1 Implement `embedder.py` with `build_embedding_input()` and `generate_embeddings()` functions
+    - Construct input text: concatenate domain name, subdomain name (if present), strand name (if present), indicator description, age band — omit null levels
+    - Call Amazon Titan Embed Text v1 via Bedrock
+    - Build EmbeddingRecord with indicator_id, state, vector, model ID, version, timestamp
+    - Store to S3 embeddings bucket and persist to Aurora PostgreSQL
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+  - [ ] 9.2 Add CloudFormation resources for Embedding Generator Lambda with Bedrock invoke permissions and S3 embeddings bucket (`els-embeddings`) with versioning
+    - _Requirements: 6.2, 6.4_
+  - [ ] 9.3 Write property tests for embedding generation
+    - **Property 17: Embedding Input Text Construction** — Input text contains domain, indicator desc, age band; includes subdomain/strand only when non-null
+    - **Validates: Requirements 6.1**
+
+- [ ] 10. Implement Data Access Layer and Query Support
+  - [ ] 10.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_state()`
+    - Use psycopg2 for Aurora PostgreSQL connections
+    - Implement cosine similarity search using pgvector operators
+    - Support filtering by state, age_band, domain, version_year
+    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - [ ] 10.2 Create database migration scripts (SQL files) for all tables, indexes, and the pgvector extension
+    - Include the full schema from the design document
+    - Version migration files sequentially (001_initial_schema.sql, etc.)
+    - _Requirements: 7.5_
+  - [ ] 10.3 Add CloudFormation resources for Aurora PostgreSQL Serverless cluster with pgvector extension, VPC, security groups, and Secrets Manager for credentials
+    - _Requirements: 7.1, 7.5_
+  - [ ] 10.4 Write property tests for query layer
+    - **Property 19: Vector Similarity Ordering** — Results ordered by decreasing cosine similarity
+    - **Validates: Requirements 7.3**
+    - **Property 20: Query Filter Correctness** — Filtered results match the specified filter values
+    - **Validates: Requirements 7.4**
+
+- [ ] 11. Implement Recommendation Generator
+  - [ ] 11.1 Implement `recommender.py` with `generate_recommendations()` function
+    - Build LLM prompt including indicator description, parent hierarchy, age band
+    - Scope all indicator queries to the requested state only
+    - Parse LLM response into Recommendation objects
+    - Implement actionability checker: verify response contains action verb + specific noun
+    - Retry with refined prompt up to 2 times if non-actionable
+    - Support domain/subdomain-level aggregation: fetch grouped indicators, produce holistic recommendations
+    - Ensure at least one parent-facing and one teacher-facing recommendation per indicator request
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
+  - [ ] 11.2 Add CloudFormation resources for Recommendation Generator Lambda with Bedrock invoke permissions and Aurora access
+    - _Requirements: 8.2, 8.6_
+  - [ ] 11.3 Write property tests for recommendation generation
+    - **Property 21: Recommendation Audience Coverage** — At least one parent and one teacher recommendation per request
+    - **Validates: Requirements 8.1**
+    - **Property 22: Recommendation Prompt Context** — Prompt includes indicator desc, hierarchy names, age band
+    - **Validates: Requirements 8.2**
+    - **Property 24: Actionability Validation** — Checker returns True only for text with action verb + specific noun
+    - **Validates: Requirements 8.5**
+    - **Property 25: Recommendation State Scoping** — All recommendations reference indicators from requested state only
+    - **Validates: Requirements 8.7**
+
+- [ ] 12. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 13. Implement Pipeline Orchestrator
+  - [ ] 13.1 Implement `orchestrator.py` with `start_pipeline()`, `rerun_stage()`, and `get_pipeline_status()` functions
+    - Chain stages in order: ingestion → extraction → detection → parsing → validation → embedding → recommendation → persistence
+    - Record PipelineStageResult for each stage (name, status, duration_ms, output_artifact)
+    - On failure: halt, record error, preserve partial results
+    - Track totals: indicators extracted, validated, embedded, recommendations generated
+    - Support re-running individual stages by reading previous stage output from S3
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+  - [ ] 13.2 Create AWS Step Functions state machine definition in CloudFormation wiring all Lambda handlers
+    - Define states for each pipeline stage with error catching and retry configuration
+    - Configure SNS topic and subscription for pipeline completion and failure notifications
+    - Add Step Functions state machine, SNS topic, and execution IAM role to CloudFormation template
+    - _Requirements: 9.1, 9.3_
+  - [ ] 13.3 Write property tests for pipeline orchestrator
+    - **Property 26: Pipeline Stage Result Completeness** — Every stage result has stage_name, status, duration_ms, output_artifact
+    - **Validates: Requirements 9.2**
+    - **Property 27: Pipeline Run Counts Invariant** — total_validated <= total_indicators and total_embedded <= total_validated
+    - **Validates: Requirements 9.4**
+
+- [ ] 14. Integration wiring and Lambda handlers
+  - [ ] 14.1 Create Lambda handler entry points for each pipeline stage
+    - Each handler: parse event, call module function, return result for Step Functions
+    - Shared error handling wrapper for consistent error reporting
+    - _Requirements: 9.1_
+  - [ ] 14.2 Consolidate and validate the full CloudFormation template
+    - Ensure all resources from previous tasks are correctly wired (S3 buckets, Lambdas, Step Functions, Aurora, SNS, IAM roles, VPC)
+    - Add CloudFormation outputs for key resource ARNs and endpoints
+    - Validate template with `aws cloudformation validate-template`
+    - Add a deploy script (`scripts/deploy.sh`) that packages Lambda code and deploys the stack
+    - _Requirements: 1.1, 1.3, 7.1, 9.1_
+
+- [ ] 15. Final checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- All tasks including property tests are required
+- Each task references specific requirements for traceability
+- Checkpoints ensure incremental validation
+- Property tests validate universal correctness properties using `hypothesis`
+- Unit tests validate specific examples and edge cases using `pytest`
+- All AWS service calls should be mockable via `moto` or dependency injection for testing
