@@ -1,4 +1,0 @@
-# file: /Users/emilycheyne/Development/kinder-readiness/src/els_pipeline/models.py
-# hypothesis_version: 6.151.5
-
-[0.0, 0.7, 1.0, 'HierarchyNode', 'col_index', 'completed', 'confidence', 'domain', 'error', 'failed', 'indicator', 'needs_review', 'parent', 'partial', 'row_index', 'running', 'strand', 'subdomain', 'success', 'teacher', 'total_embedded', 'total_indicators', 'total_validated']

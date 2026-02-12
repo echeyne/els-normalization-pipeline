@@ -1,4 +1,0 @@
-# file: /Users/emilycheyne/Development/kinder-readiness/src/els_pipeline/config.py
-# hypothesis_version: 6.151.5
-
-['0.7', '5432', 'AWS_REGION', 'BEDROCK_LLM_MODEL_ID', 'CONFIDENCE_THRESHOLD', 'DB_HOST', 'DB_NAME', 'DB_PASSWORD', 'DB_PORT', 'DB_USER', 'ELS_PROCESSED_BUCKET', 'ELS_RAW_BUCKET', 'els-embeddings', 'els-processed-json', 'els-raw-documents', 'els_corpus', 'localhost', 'postgres', 'us-east-1']
