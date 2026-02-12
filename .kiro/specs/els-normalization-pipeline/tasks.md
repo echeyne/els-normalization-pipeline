@@ -41,29 +41,29 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Property 3: Format Validation Correctness** — PDF/HTML accepted, all others rejected with error
     - **Validates: Requirements 1.4**
 
-- [ ] 3. Implement Text Extractor
-  - [ ] 3.1 Implement `extractor.py` with `extract_text()` function
+- [x] 3. Implement Text Extractor
+  - [x] 3.1 Implement `extractor.py` with `extract_text()` function
     - Call AWS Textract (async for large docs, sync for small)
     - Parse Textract response into `TextBlock` objects preserving block_type, row_index, col_index for table cells
     - Sort blocks by (page_number, top_position, left_position) for reading order
     - Record source page number on every block
     - Handle errors: log failures with document identifiers, return error result for empty output
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
-  - [ ] 3.2 Add CloudFormation resources for Text Extractor Lambda with Textract permissions and appropriate timeout/memory for large PDFs
+  - [x] 3.2 Add CloudFormation resources for Text Extractor Lambda with Textract permissions and appropriate timeout/memory for large PDFs
     - _Requirements: 2.1_
-  - [ ] 3.3 Write property tests for text extraction ordering and structure
+  - [x] 3.3 Write property tests for text extraction ordering and structure
     - **Property 4: Text Block Reading Order** — For any set of blocks with positions, output sorted by (page, top, left)
     - **Validates: Requirements 2.2**
     - **Property 5: Table Cell Structure Preservation** — For any TABLE_CELL block, row_index and col_index are non-null and non-negative
     - **Validates: Requirements 2.3**
     - **Property 6: Page Number Presence** — For any text block, page_number is a positive integer
     - **Validates: Requirements 2.4**
-  - [ ] 3.4 Write integration tests for text extractor with mocked Textract
+  - [x] 3.4 Write integration tests for text extractor with mocked Textract
     - Test successful extraction with mocked Textract responses
     - Test table cell parsing and structure preservation
     - Test reading order sorting
     - Test error handling for empty/invalid responses
-  - [ ] 3.5 Create manual AWS test script for text extractor
+  - [x] 3.5 Create manual AWS test script for text extractor
     - Script: `scripts/test_extractor_manual.py`
     - Test with real Textract on California standards PDF
     - Include environment variable setup instructions

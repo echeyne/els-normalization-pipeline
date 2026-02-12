@@ -76,6 +76,53 @@ Resources:
         - Key: Project
           Value: ELS-Pipeline
 
+  # IAM Role for Text Extractor Lambda
+  TextExtractorLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "els-text-extractor-lambda-role-${EnvironmentName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3RawBucketReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:HeadObject
+                Resource: !Sub "${RawDocumentsBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource: !GetAtt RawDocumentsBucket.Arn
+        - PolicyName: TextractAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - textract:DetectDocumentText
+                  - textract:AnalyzeDocument
+                  - textract:StartDocumentTextDetection
+                  - textract:GetDocumentTextDetection
+                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
   # Lambda functions will be added in subsequent tasks
   # Step Functions state machine will be added in subsequent tasks
   # Aurora PostgreSQL cluster will be added in subsequent tasks
@@ -119,3 +166,9 @@ Outputs:
     Value: !GetAtt IngesterLambdaRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-IngesterLambdaRoleArn"
+
+  TextExtractorLambdaRoleArn:
+    Description: ARN of the Text Extractor Lambda IAM role
+    Value: !GetAtt TextExtractorLambdaRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TextExtractorLambdaRoleArn"
