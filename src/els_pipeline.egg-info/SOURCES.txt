@@ -1,9 +1,0 @@
-pyproject.toml
-src/els_pipeline/__init__.py
-src/els_pipeline/config.py
-src/els_pipeline/models.py
-src/els_pipeline.egg-info/PKG-INFO
-src/els_pipeline.egg-info/SOURCES.txt
-src/els_pipeline.egg-info/dependency_links.txt
-src/els_pipeline.egg-info/requires.txt
-src/els_pipeline.egg-info/top_level.txt

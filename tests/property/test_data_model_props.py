@@ -5,7 +5,7 @@ Feature: els-normalization-pipeline
 
 import pytest
 from hypothesis import given, strategies as st
-from datetime import datetime
+from datetime import datetime, timezone
 
 from els_pipeline.models import (
     DetectedElement,
@@ -51,7 +51,7 @@ def embedding_record_strategy(draw):
     embedding_model = draw(st.text(min_size=1, max_size=100))
     embedding_version = draw(st.text(min_size=1, max_size=10))
     input_text = draw(st.text(min_size=1, max_size=1000))
-    created_at = datetime.utcnow().isoformat()
+    created_at = datetime.now(timezone.utc).isoformat()
     
     return EmbeddingRecord(
         indicator_id=indicator_id,
@@ -74,7 +74,7 @@ def recommendation_strategy(draw):
     activity_description = draw(st.text(min_size=1, max_size=1000))
     age_band = draw(st.text(min_size=1, max_size=10))
     generation_model = draw(st.text(min_size=1, max_size=100))
-    created_at = datetime.utcnow().isoformat()
+    created_at = datetime.now(timezone.utc).isoformat()
     
     return Recommendation(
         recommendation_id=recommendation_id,

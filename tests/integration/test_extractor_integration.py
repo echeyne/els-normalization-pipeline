@@ -118,9 +118,13 @@ def test_successful_extraction_with_mocked_textract(mock_textract_response):
         mock_s3 = MagicMock()
         mock_s3.head_object.return_value = {'ContentLength': 1024 * 1024}  # 1MB
         
-        # Mock Textract client
+        # Mock Textract client - mock async methods since file is 1MB
         mock_textract = MagicMock()
-        mock_textract.detect_document_text.return_value = mock_textract_response
+        mock_textract.start_document_analysis.return_value = {'JobId': 'test-job-123'}
+        mock_textract.get_document_analysis.return_value = {
+            'JobStatus': 'SUCCEEDED',
+            'Blocks': mock_textract_response['Blocks']
+        }
         
         # Configure boto3.client to return appropriate mocks
         def client_side_effect(service, **kwargs):
@@ -218,7 +222,11 @@ def test_error_handling_empty_response(mock_empty_textract_response):
         
         # Mock Textract client with empty response
         mock_textract = MagicMock()
-        mock_textract.detect_document_text.return_value = mock_empty_textract_response
+        mock_textract.start_document_analysis.return_value = {'JobId': 'test-job-empty'}
+        mock_textract.get_document_analysis.return_value = {
+            'JobStatus': 'SUCCEEDED',
+            'Blocks': mock_empty_textract_response['Blocks']
+        }
         
         def client_side_effect(service, **kwargs):
             if service == 's3':
@@ -247,7 +255,11 @@ def test_error_handling_invalid_response(mock_textract_response_no_text):
         
         # Mock Textract client with response containing no text
         mock_textract = MagicMock()
-        mock_textract.detect_document_text.return_value = mock_textract_response_no_text
+        mock_textract.start_document_analysis.return_value = {'JobId': 'test-job-notext'}
+        mock_textract.get_document_analysis.return_value = {
+            'JobStatus': 'SUCCEEDED',
+            'Blocks': mock_textract_response_no_text['Blocks']
+        }
         
         def client_side_effect(service, **kwargs):
             if service == 's3':
@@ -295,9 +307,9 @@ def test_error_handling_textract_failure():
         
         # Mock Textract client that raises an error
         mock_textract = MagicMock()
-        mock_textract.detect_document_text.side_effect = ClientError(
+        mock_textract.start_document_analysis.side_effect = ClientError(
             {'Error': {'Code': 'ThrottlingException', 'Message': 'Rate exceeded'}},
-            'DetectDocumentText'
+            'StartDocumentAnalysis'
         )
         
         def client_side_effect(service, **kwargs):

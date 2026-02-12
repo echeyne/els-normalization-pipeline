@@ -1,7 +1,7 @@
 """Raw document ingestion module for the ELS pipeline."""
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 import boto3
@@ -78,7 +78,7 @@ def ingest_document(request: IngestionRequest) -> IngestionResult:
     s3_key = construct_s3_path(request.state, request.version_year, request.filename)
     
     # Prepare metadata
-    upload_timestamp = datetime.utcnow().isoformat() + "Z"
+    upload_timestamp = datetime.now(timezone.utc).isoformat()
     metadata = {
         "state": request.state,
         "version_year": str(request.version_year),

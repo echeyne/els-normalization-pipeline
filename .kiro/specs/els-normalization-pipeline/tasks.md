@@ -68,7 +68,7 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Test with real Textract on California standards PDF
     - Include environment variable setup instructions
 
-- [ ] 4. Checkpoint - Ensure all tests pass
+- [x] 4. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 5. Implement Structure Detector
