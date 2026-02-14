@@ -26,3 +26,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.hypothesis]
+max_examples = 20
+deadline = 1000

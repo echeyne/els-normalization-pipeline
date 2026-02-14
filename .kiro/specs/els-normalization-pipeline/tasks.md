@@ -214,7 +214,7 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Update end-to-end tests to verify country code flow through entire pipeline
     - _Requirements: all_
 
-- [ ] 9. Checkpoint - Ensure all tests pass
+- [x] 9. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 10. Implement Data Access Layer and Query Support

@@ -375,13 +375,28 @@ def parse_hierarchy(
                     orphaned.append(element)
                     continue
                 
+                # Check if indicator code matches domain code prefix
+                if not element.code.startswith(current_domain.code):
+                    orphaned.append(element)
+                    continue
+                
                 # For depth 3+, require subdomain
                 if depth >= 3 and not current_subdomain:
                     orphaned.append(element)
                     continue
                 
+                # For depth 3+, check if indicator code matches subdomain prefix
+                if depth >= 3 and current_subdomain and not element.code.startswith(current_subdomain.code):
+                    orphaned.append(element)
+                    continue
+                
                 # For depth 4, require strand
                 if depth >= 4 and not current_strand:
+                    orphaned.append(element)
+                    continue
+                
+                # For depth 4, check if indicator code matches strand prefix
+                if depth >= 4 and current_strand and not element.code.startswith(current_strand.code):
                     orphaned.append(element)
                     continue
                 
