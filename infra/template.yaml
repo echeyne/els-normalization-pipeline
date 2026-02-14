@@ -156,6 +156,26 @@ Resources:
         - Key: Project
           Value: ELS-Pipeline
 
+  # IAM Role for Hierarchy Parser Lambda
+  HierarchyParserLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "els-hierarchy-parser-lambda-role-${EnvironmentName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
   # Lambda functions will be added in subsequent tasks
   # Step Functions state machine will be added in subsequent tasks
   # Aurora PostgreSQL cluster will be added in subsequent tasks
@@ -211,3 +231,9 @@ Outputs:
     Value: !GetAtt StructureDetectorLambdaRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-StructureDetectorLambdaRoleArn"
+
+  HierarchyParserLambdaRoleArn:
+    Description: ARN of the Hierarchy Parser Lambda IAM role
+    Value: !GetAtt HierarchyParserLambdaRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-HierarchyParserLambdaRoleArn"

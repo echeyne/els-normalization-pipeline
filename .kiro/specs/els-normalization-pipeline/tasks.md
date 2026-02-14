@@ -94,17 +94,17 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Test with real Bedrock on extracted text
     - Include environment variable setup instructions
 
-- [ ] 6. Implement Hierarchy Parser
-  - [ ] 6.1 Implement `parser.py` with `parse_hierarchy()` function
+- [x] 6. Implement Hierarchy Parser
+  - [x] 6.1 Implement `parser.py` with `parse_hierarchy()` function
     - Detect number of distinct hierarchy levels in input elements
     - Apply depth normalization: 2 levels → Domain+Indicator, 3 → Domain+Subdomain+Indicator, 4+ → all four
     - Generate deterministic Standard_ID: `{state}-{year}-{domain_code}-{indicator_code}`
     - Assemble tree and detect orphaned elements (no path to domain)
     - Normalize all state-specific terminology to canonical levels
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
-  - [ ] 6.2 Add CloudFormation resource for Hierarchy Parser Lambda
+  - [x] 6.2 Add CloudFormation resource for Hierarchy Parser Lambda
     - _Requirements: 4.1_
-  - [ ] 6.3 Write property tests for hierarchy parsing
+  - [x] 6.3 Write property tests for hierarchy parsing
     - **Property 9: Canonical Level Normalization** — Output contains only levels from {domain, subdomain, strand, indicator}
     - **Validates: Requirements 4.1**
     - **Property 10: Depth-Based Hierarchy Mapping** — For N levels: correct null/non-null pattern per depth
@@ -113,12 +113,12 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 4.5**
     - **Property 12: No Orphaned Indicators** — Every standard has non-null domain; orphans in separate list
     - **Validates: Requirements 4.6**
-  - [ ] 6.4 Write integration tests for hierarchy parser
+  - [x] 6.4 Write integration tests for hierarchy parser
     - Test depth normalization for 2, 3, and 4+ level hierarchies
     - Test Standard_ID generation and determinism
     - Test orphan detection
     - Test tree assembly with various input structures
-  - [ ] 6.5 Create manual test script for hierarchy parser
+  - [x] 6.5 Create manual test script for hierarchy parser
     - Script: `scripts/test_parser_manual.py`
     - Test with sample detected elements from various states
     - Verify Standard_ID format and uniqueness
@@ -160,7 +160,7 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
 - [ ] 9. Implement Embedding Generator
   - [ ] 9.1 Implement `embedder.py` with `build_embedding_input()` and `generate_embeddings()` functions
     - Construct input text: concatenate domain name, subdomain name (if present), strand name (if present), indicator description, age band — omit null levels
-    - Call Amazon Titan Embed Text v1 via Bedrock
+    - Call Amazon Titan Embed Text v2 via Bedrock
     - Build EmbeddingRecord with indicator_id, state, vector, model ID, version, timestamp
     - Store to S3 embeddings bucket and persist to Aurora PostgreSQL
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_

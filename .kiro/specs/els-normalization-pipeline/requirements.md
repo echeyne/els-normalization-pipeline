@@ -101,7 +101,7 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 #### Acceptance Criteria
 
 1. WHEN generating an embedding for an Indicator, THE Embedding_Generator SHALL construct the input text by concatenating: domain name, subdomain name (if present), strand name (if present), indicator description, and age band
-2. WHEN an embedding is generated, THE Embedding_Generator SHALL use the Amazon Titan Embed Text v1 model via Amazon Bedrock
+2. WHEN an embedding is generated, THE Embedding_Generator SHALL use the Amazon Titan Embed Text v2 model via Amazon Bedrock
 3. WHEN an embedding is generated, THE Embedding_Generator SHALL store an embedding record containing: indicator_id, state, vector, embedding_model identifier, embedding_version, and created_at timestamp
 4. WHEN an embedding record is stored, THE Embedding_Generator SHALL store the record in S3_Embeddings_Bucket and persist the vector to the Vector_Store
 5. IF the embedding model or version changes, THEN THE Embedding_Generator SHALL assign a new embedding_version and retain previous embedding records for traceability
