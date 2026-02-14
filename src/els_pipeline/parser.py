@@ -106,21 +106,22 @@ def assign_canonical_levels(
 
 
 def generate_standard_id(
-    state: str, version_year: int, domain_code: str, indicator_code: str
+    country: str, state: str, version_year: int, domain_code: str, indicator_code: str
 ) -> str:
     """
     Generate a deterministic Standard_ID.
     
     Args:
+        country: Two-letter ISO 3166-1 alpha-2 country code
         state: Two-letter state code
         version_year: Year of the standards version
         domain_code: Domain code
         indicator_code: Indicator code
         
     Returns:
-        Standard_ID in format: {STATE}-{YEAR}-{DOMAIN_CODE}-{INDICATOR_CODE}
+        Standard_ID in format: {COUNTRY}-{STATE}-{YEAR}-{DOMAIN_CODE}-{INDICATOR_CODE}
     """
-    return f"{state}-{version_year}-{domain_code}-{indicator_code}"
+    return f"{country}-{state}-{version_year}-{domain_code}-{indicator_code}"
 
 
 def build_hierarchy_tree(
@@ -184,6 +185,7 @@ def build_hierarchy_tree(
 
 def extract_standards_from_tree(
     tree: Dict[str, Dict],
+    country: str,
     state: str,
     version_year: int,
     depth: int,
@@ -193,6 +195,7 @@ def extract_standards_from_tree(
     
     Args:
         tree: Hierarchy tree structure
+        country: Two-letter ISO 3166-1 alpha-2 country code
         state: State code
         version_year: Version year
         depth: Hierarchy depth
@@ -255,11 +258,12 @@ def extract_standards_from_tree(
                         )
                         
                         standard_id = generate_standard_id(
-                            state, version_year, domain_code, indicator_element.code
+                            country, state, version_year, domain_code, indicator_element.code
                         )
                         
                         standard = NormalizedStandard(
                             standard_id=standard_id,
+                            country=country,
                             state=state,
                             version_year=version_year,
                             domain=domain_level,
@@ -275,7 +279,7 @@ def extract_standards_from_tree(
 
 
 def parse_hierarchy(
-    elements: List[DetectedElement], state: str, version_year: int
+    elements: List[DetectedElement], country: str, state: str, version_year: int
 ) -> ParseResult:
     """
     Parse detected elements into normalized standards with canonical hierarchy.
@@ -289,6 +293,7 @@ def parse_hierarchy(
     
     Args:
         elements: List of detected hierarchical elements
+        country: Two-letter ISO 3166-1 alpha-2 country code
         state: Two-letter state code
         version_year: Year of the standards version
         
@@ -411,12 +416,13 @@ def parse_hierarchy(
                 
                 # Generate Standard_ID
                 standard_id = generate_standard_id(
-                    state, version_year, current_domain.code, element.code
+                    country, state, version_year, current_domain.code, element.code
                 )
                 
                 # Create NormalizedStandard
                 standard = NormalizedStandard(
                     standard_id=standard_id,
+                    country=country,
                     state=state,
                     version_year=version_year,
                     domain=domain_level,

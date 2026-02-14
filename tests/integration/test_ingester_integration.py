@@ -34,6 +34,7 @@ def test_ingester_with_mocked_s3_success():
     try:
         request = IngestionRequest(
             file_path=tmp_path,
+            country="US",
             state="CA",
             version_year=2021,
             source_url="https://www.cde.ca.gov/sp/cd/re/documents/ptklfataglance.pdf",
@@ -45,11 +46,12 @@ def test_ingester_with_mocked_s3_success():
         
         # Verify result
         assert result.status == "success"
-        assert result.s3_key == "CA/2021/california_standards_2021.pdf"
+        assert result.s3_key == "US/CA/2021/california_standards_2021.pdf"
         assert result.s3_version_id != ""
         assert result.error is None
         
         # Verify metadata
+        assert result.metadata["country"] == "US"
         assert result.metadata["state"] == "CA"
         assert result.metadata["version_year"] == "2021"
         assert result.metadata["source_url"] == "https://www.cde.ca.gov/sp/cd/re/documents/ptklfataglance.pdf"
@@ -58,6 +60,7 @@ def test_ingester_with_mocked_s3_success():
         
         # Verify file exists in S3
         response = s3.head_object(Bucket=Config.S3_RAW_BUCKET, Key=result.s3_key)
+        assert response['Metadata']['country'] == "US"
         assert response['Metadata']['state'] == "CA"
         assert response['Metadata']['version_year'] == "2021"
         
@@ -89,6 +92,7 @@ def test_ingester_with_mocked_s3_html_format():
     try:
         request = IngestionRequest(
             file_path=tmp_path,
+            country="US",
             state="TX",
             version_year=2022,
             source_url="https://example.com/standards.html",
@@ -99,7 +103,7 @@ def test_ingester_with_mocked_s3_html_format():
         result = ingest_document(request)
         
         assert result.status == "success"
-        assert result.s3_key == "TX/2022/texas_standards_2022.html"
+        assert result.s3_key == "US/TX/2022/texas_standards_2022.html"
         assert result.error is None
         
     finally:
@@ -121,6 +125,7 @@ def test_ingester_with_mocked_s3_unsupported_format():
     try:
         request = IngestionRequest(
             file_path=tmp_path,
+            country="US",
             state="CA",
             version_year=2021,
             source_url="https://example.com/standards.docx",
@@ -148,6 +153,7 @@ def test_ingester_file_not_found():
     
     request = IngestionRequest(
         file_path="/nonexistent/path/to/file.pdf",
+        country="US",
         state="CA",
         version_year=2021,
         source_url="https://example.com/standards.pdf",
@@ -181,6 +187,7 @@ def test_ingester_multiple_uploads_same_key():
     try:
         request1 = IngestionRequest(
             file_path=tmp_path,
+            country="US",
             state="CA",
             version_year=2021,
             source_url="https://example.com/v1.pdf",
@@ -203,6 +210,7 @@ def test_ingester_multiple_uploads_same_key():
     try:
         request2 = IngestionRequest(
             file_path=tmp_path,
+            country="US",
             state="CA",
             version_year=2021,
             source_url="https://example.com/v2.pdf",

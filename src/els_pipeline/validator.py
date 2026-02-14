@@ -15,8 +15,9 @@ from .config import Config
 # JSON Schema for Canonical JSON
 CANONICAL_SCHEMA = {
     "type": "object",
-    "required": ["state", "document", "standard", "metadata"],
+    "required": ["country", "state", "document", "standard", "metadata"],
     "properties": {
+        "country": {"type": "string", "minLength": 2, "maxLength": 2, "pattern": "^[A-Z]{2}$"},
         "state": {"type": "string", "minLength": 1},
         "document": {
             "type": "object",
@@ -88,7 +89,7 @@ def _validate_schema(record: Dict[str, Any]) -> list[ValidationError]:
     errors = []
     
     # Check top-level required fields
-    for field in ["state", "document", "standard", "metadata"]:
+    for field in ["country", "state", "document", "standard", "metadata"]:
         if field not in record:
             errors.append(
                 ValidationError(
@@ -103,6 +104,25 @@ def _validate_schema(record: Dict[str, Any]) -> list[ValidationError]:
                     field_path=field,
                     message=f"Field cannot be empty: {field}",
                     error_type="invalid_type",
+                )
+            )
+    
+    # Validate country
+    if "country" in record:
+        if not isinstance(record["country"], str) or len(record["country"]) != 2:
+            errors.append(
+                ValidationError(
+                    field_path="country",
+                    message="country must be a two-letter ISO 3166-1 alpha-2 code",
+                    error_type="invalid_type",
+                )
+            )
+        elif not record["country"].isupper() or not record["country"].isalpha():
+            errors.append(
+                ValidationError(
+                    field_path="country",
+                    message="country must be uppercase letters only",
+                    error_type="format",
                 )
             )
     
@@ -331,14 +351,14 @@ def _validate_schema(record: Dict[str, Any]) -> list[ValidationError]:
 
 def validate_record(
     record: Dict[str, Any],
-    existing_ids: Optional[Set[str]] = None,
+    existing_ids: Optional[Set[tuple[str, str, int, str]]] = None,
 ) -> ValidationResult:
     """
     Validate a Canonical JSON record.
     
     Args:
         record: The record to validate
-        existing_ids: Set of existing standard_ids for uniqueness checking
+        existing_ids: Set of existing (country, state, version_year, standard_id) tuples for uniqueness checking
         
     Returns:
         ValidationResult with is_valid flag and any errors
@@ -350,17 +370,24 @@ def validate_record(
     errors.extend(schema_errors)
     
     # Uniqueness check
-    if existing_ids is not None and "standard" in record:
+    if existing_ids is not None and "standard" in record and "document" in record and "country" in record and "state" in record:
         std = record.get("standard", {})
+        doc = record.get("document", {})
+        country = record.get("country")
+        state = record.get("state")
+        version_year = doc.get("version_year")
         standard_id = std.get("standard_id")
-        if standard_id and standard_id in existing_ids:
-            errors.append(
-                ValidationError(
-                    field_path="standard.standard_id",
-                    message=f"Duplicate standard_id: {standard_id}",
-                    error_type="uniqueness",
+        
+        if country and state and version_year and standard_id:
+            record_key = (country, state, version_year, standard_id)
+            if record_key in existing_ids:
+                errors.append(
+                    ValidationError(
+                        field_path="standard.standard_id",
+                        message=f"Duplicate standard_id: {standard_id} for country={country}, state={state}, year={version_year}",
+                        error_type="uniqueness",
+                    )
                 )
-            )
     
     is_valid = len(errors) == 0
     
@@ -425,6 +452,7 @@ def serialize_record(
     
     # Build canonical JSON
     canonical = {
+        "country": standard.country,
         "state": standard.state,
         "document": {
             "title": document_meta["title"],
@@ -486,6 +514,7 @@ def deserialize_record(json_data: Dict[str, Any]) -> NormalizedStandard:
     # Build NormalizedStandard
     return NormalizedStandard(
         standard_id=std["standard_id"],
+        country=json_data["country"],
         state=json_data["state"],
         version_year=doc["version_year"],
         domain=domain,
@@ -514,12 +543,13 @@ def store_validated_record(
     if s3_client is None:
         s3_client = boto3.client("s3", region_name=Config.AWS_REGION)
     
+    country = record["country"]
     state = record["state"]
     year = record["document"]["version_year"]
     standard_id = record["standard"]["standard_id"]
     
-    # Construct S3 key
-    s3_key = f"{state}/{year}/{standard_id}.json"
+    # Construct S3 key with country
+    s3_key = f"{country}/{state}/{year}/{standard_id}.json"
     
     # Upload to S3
     s3_client.put_object(

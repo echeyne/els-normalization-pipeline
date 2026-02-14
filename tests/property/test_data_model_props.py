@@ -46,7 +46,8 @@ def detected_element_strategy(draw):
 def embedding_record_strategy(draw):
     """Generate an EmbeddingRecord with all required fields."""
     indicator_id = draw(st.text(min_size=1, max_size=50))
-    state = draw(st.text(min_size=2, max_size=2, alphabet=st.characters(whitelist_categories=('Lu',))))
+    country = draw(st.text(min_size=2, max_size=2, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
+    state = draw(st.text(min_size=2, max_size=2, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
     vector = draw(st.lists(st.floats(min_value=-1.0, max_value=1.0), min_size=1, max_size=1536))
     embedding_model = draw(st.text(min_size=1, max_size=100))
     embedding_version = draw(st.text(min_size=1, max_size=10))
@@ -55,6 +56,7 @@ def embedding_record_strategy(draw):
     
     return EmbeddingRecord(
         indicator_id=indicator_id,
+        country=country,
         state=state,
         vector=vector,
         embedding_model=embedding_model,
@@ -69,7 +71,8 @@ def recommendation_strategy(draw):
     """Generate a Recommendation with all required fields."""
     recommendation_id = draw(st.text(min_size=1, max_size=100))
     indicator_id = draw(st.text(min_size=1, max_size=50))
-    state = draw(st.text(min_size=2, max_size=2, alphabet=st.characters(whitelist_categories=('Lu',))))
+    country = draw(st.text(min_size=2, max_size=2, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
+    state = draw(st.text(min_size=2, max_size=2, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
     audience = draw(st.sampled_from(list(AudienceEnum)))
     activity_description = draw(st.text(min_size=1, max_size=1000))
     age_band = draw(st.text(min_size=1, max_size=10))
@@ -79,6 +82,7 @@ def recommendation_strategy(draw):
     return Recommendation(
         recommendation_id=recommendation_id,
         indicator_id=indicator_id,
+        country=country,
         state=state,
         audience=audience,
         activity_description=activity_description,
@@ -122,6 +126,7 @@ def test_property_18_embedding_record_completeness(record):
     """
     # All required fields must be present and non-empty
     assert record.indicator_id, "indicator_id must be present and non-empty"
+    assert record.country, "country must be present and non-empty"
     assert record.state, "state must be present and non-empty"
     assert record.vector, "vector must be present and non-empty"
     assert len(record.vector) > 0, "vector must contain at least one element"
@@ -147,6 +152,8 @@ def test_property_23_recommendation_record_completeness(recommendation):
         "recommendation_id must be present and non-empty"
     assert recommendation.indicator_id, \
         "indicator_id must be present and non-empty"
+    assert recommendation.country, \
+        "country must be present and non-empty"
     assert recommendation.state, \
         "state must be present and non-empty"
     assert recommendation.audience in [AudienceEnum.PARENT, AudienceEnum.TEACHER], \

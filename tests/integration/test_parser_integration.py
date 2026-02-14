@@ -43,7 +43,7 @@ class TestDepthNormalization:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         assert result.status == "success"
         assert len(result.standards) == 2
@@ -103,7 +103,7 @@ class TestDepthNormalization:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         assert result.status == "success"
         assert len(result.standards) == 2
@@ -174,7 +174,7 @@ class TestDepthNormalization:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         assert result.status == "success"
         assert len(result.standards) == 2
@@ -195,24 +195,24 @@ class TestStandardIDGeneration:
     
     def test_standard_id_format(self):
         """Test that Standard_ID follows the correct format."""
-        standard_id = generate_standard_id("CA", 2021, "LLD", "LLD.A.1.a")
+        standard_id = generate_standard_id("US", "CA", 2021, "LLD", "LLD.A.1.a")
         
-        assert standard_id == "CA-2021-LLD-LLD.A.1.a"
-        assert standard_id.startswith("CA-")
+        assert standard_id == "US-CA-2021-LLD-LLD.A.1.a"
+        assert standard_id.startswith("US-")
         assert "2021" in standard_id
     
     def test_standard_id_determinism(self):
         """Test that Standard_ID generation is deterministic."""
-        id1 = generate_standard_id("CA", 2021, "LLD", "LLD.A.1.a")
-        id2 = generate_standard_id("CA", 2021, "LLD", "LLD.A.1.a")
+        id1 = generate_standard_id("US", "CA", 2021, "LLD", "LLD.A.1.a")
+        id2 = generate_standard_id("US", "CA", 2021, "LLD", "LLD.A.1.a")
         
         assert id1 == id2
     
     def test_standard_id_uniqueness(self):
         """Test that different inputs produce different Standard_IDs."""
-        id1 = generate_standard_id("CA", 2021, "LLD", "LLD.A.1.a")
-        id2 = generate_standard_id("CA", 2021, "LLD", "LLD.A.1.b")
-        id3 = generate_standard_id("TX", 2021, "LLD", "LLD.A.1.a")
+        id1 = generate_standard_id("US", "CA", 2021, "LLD", "LLD.A.1.a")
+        id2 = generate_standard_id("US", "CA", 2021, "LLD", "LLD.A.1.b")
+        id3 = generate_standard_id("US", "TX", 2021, "LLD", "LLD.A.1.a")
         
         assert id1 != id2
         assert id1 != id3
@@ -243,12 +243,12 @@ class TestStandardIDGeneration:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         assert len(result.standards) == 1
         standard = result.standards[0]
         
-        expected_id = "CA-2021-LLD-LLD.1"
+        expected_id = "US-CA-2021-LLD-LLD.1"
         assert standard.standard_id == expected_id
 
 
@@ -270,7 +270,7 @@ class TestOrphanDetection:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         # The orphan should be in orphaned_elements
         assert len(result.orphaned_elements) == 1
@@ -314,7 +314,7 @@ class TestOrphanDetection:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         # One valid standard
         assert len(result.standards) == 1
@@ -373,7 +373,7 @@ class TestTreeAssembly:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         assert result.status == "success"
         assert len(result.standards) == 2
@@ -417,7 +417,7 @@ class TestTreeAssembly:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         # Only the valid indicator should be parsed
         assert len(result.standards) == 1
@@ -427,7 +427,7 @@ class TestTreeAssembly:
         """Test parsing with an empty elements list."""
         elements = []
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         assert result.status == "error"
         assert len(result.standards) == 0
@@ -448,7 +448,7 @@ class TestTreeAssembly:
             ),
         ]
         
-        result = parse_hierarchy(elements, "CA", 2021)
+        result = parse_hierarchy(elements, "US", "CA", 2021)
         
         assert result.status == "error"
         assert len(result.standards) == 0

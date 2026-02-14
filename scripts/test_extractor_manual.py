@@ -12,14 +12,14 @@ Prerequisites:
 Environment Variables:
 - ELS_RAW_BUCKET: S3 bucket name for raw documents (default: els-raw-documents)
 - AWS_REGION: AWS region (default: us-east-1)
-- TEST_DOCUMENT_KEY: S3 key of the test document (e.g., "CA/2021/california_all_standards_2021.pdf")
+- TEST_DOCUMENT_KEY: S3 key of the test document (e.g., "US/CA/2021/california_all_standards_2021.pdf")
 - TEST_DOCUMENT_VERSION: S3 version ID of the test document (optional)
 
 Usage:
     # Set environment variables
     export ELS_RAW_BUCKET="els-raw-documents-dev-123456789"
     export AWS_REGION="us-east-1"
-    export TEST_DOCUMENT_KEY="CA/2021/california_all_standards_2021.pdf"
+    export TEST_DOCUMENT_KEY="US/CA/2021/california_all_standards_2021.pdf"
     
     # Run the script
     python scripts/test_extractor_manual.py
@@ -69,7 +69,7 @@ def validate_environment():
         print(f"\n❌ Missing required environment variables: {', '.join(missing_vars)}")
         print("\nPlease set the missing variables and try again.")
         print("Example:")
-        print('  export TEST_DOCUMENT_KEY="CA/2021/california_all_standards_2021.pdf"')
+        print('  export TEST_DOCUMENT_KEY="US/CA/2021/california_all_standards_2021.pdf"')
         return False
     
     print("\n✓ All required environment variables are set")

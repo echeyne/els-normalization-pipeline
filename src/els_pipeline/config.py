@@ -28,3 +28,10 @@ class Config:
     DB_NAME = os.getenv("DB_NAME", "els_corpus")
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+    
+    # Step Functions Configuration
+    STEP_FUNCTIONS_STATE_MACHINE_ARN = os.getenv(
+        "STEP_FUNCTIONS_STATE_MACHINE_ARN",
+        "arn:aws:states:us-east-1:123456789012:stateMachine:els-pipeline"
+    )
+

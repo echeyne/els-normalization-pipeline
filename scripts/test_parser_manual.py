@@ -32,6 +32,7 @@ def print_standard(standard, index):
     """Print a standard in a readable format."""
     print(f"\n  Standard #{index + 1}:")
     print(f"    Standard ID: {standard.standard_id}")
+    print(f"    Country: {standard.country}")
     print(f"    State: {standard.state}")
     print(f"    Year: {standard.version_year}")
     print(f"    Domain: {standard.domain.code} - {standard.domain.name}")
@@ -69,7 +70,7 @@ def test_california_standards():
     
     print(f"\n  Loaded {len(elements)} elements from detector_test_output.json")
     
-    result = parse_hierarchy(elements, "CA", 2021)
+    result = parse_hierarchy(elements, "US", "CA", 2021)
     
     print(f"\n  Status: {result.status}")
     print(f"  Total Standards: {len(result.standards)}")
@@ -94,7 +95,7 @@ def test_california_standards():
     # Verify Standard_ID format
     print("\n  Standard_ID Format Verification:")
     for standard in result.standards:
-        expected_format = f"CA-2021-ATL-{standard.indicator.code}"
+        expected_format = f"US-CA-2021-ATL-{standard.indicator.code}"
         matches = standard.standard_id == expected_format
         print(f"    {standard.standard_id} - {'✓ PASS' if matches else '✗ FAIL'}")
     
@@ -151,7 +152,7 @@ def test_texas_standards():
         ),
     ]
     
-    result = parse_hierarchy(elements, "TX", 2020)
+    result = parse_hierarchy(elements, "US", "TX", 2020)
     
     print(f"\n  Status: {result.status}")
     print(f"  Total Standards: {len(result.standards)}")
@@ -209,7 +210,7 @@ def test_florida_standards():
         ),
     ]
     
-    result = parse_hierarchy(elements, "FL", 2022)
+    result = parse_hierarchy(elements, "US", "FL", 2022)
     
     print(f"\n  Status: {result.status}")
     print(f"  Total Standards: {len(result.standards)}")
@@ -267,7 +268,7 @@ def test_orphan_detection():
         ),
     ]
     
-    result = parse_hierarchy(elements, "NY", 2021)
+    result = parse_hierarchy(elements, "US", "NY", 2021)
     
     print(f"\n  Status: {result.status}")
     print(f"  Total Standards: {len(result.standards)}")
@@ -296,19 +297,19 @@ def test_standard_id_determinism():
     print_section("Test 5: Standard_ID Determinism")
     
     test_cases = [
-        ("CA", 2021, "LLD", "LLD.A.1.a"),
-        ("TX", 2020, "I", "I.A.1"),
-        ("FL", 2022, "PM", "PM.1"),
-        ("NY", 2021, "CD", "CD.1"),
+        ("US", "CA", 2021, "LLD", "LLD.A.1.a"),
+        ("US", "TX", 2020, "I", "I.A.1"),
+        ("US", "FL", 2022, "PM", "PM.1"),
+        ("US", "NY", 2021, "CD", "CD.1"),
     ]
     
     print("\n  Testing determinism (generating each ID twice):")
-    for state, year, domain, indicator in test_cases:
-        id1 = generate_standard_id(state, year, domain, indicator)
-        id2 = generate_standard_id(state, year, domain, indicator)
+    for country, state, year, domain, indicator in test_cases:
+        id1 = generate_standard_id(country, state, year, domain, indicator)
+        id2 = generate_standard_id(country, state, year, domain, indicator)
         
         matches = id1 == id2
-        expected_format = f"{state}-{year}-{domain}-{indicator}"
+        expected_format = f"{country}-{state}-{year}-{domain}-{indicator}"
         format_matches = id1 == expected_format
         
         print(f"    {id1}")

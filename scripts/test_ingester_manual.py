@@ -60,6 +60,7 @@ def test_california_standards():
     # Create ingestion request
     request = IngestionRequest(
         file_path=file_path,
+        country="US",
         state="CA",
         version_year=2021,
         source_url="https://www.cde.ca.gov/sp/cd/re/documents/ptklfataglance.pdf",

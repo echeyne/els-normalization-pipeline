@@ -29,7 +29,9 @@ def hierarchy_level_strategy(draw, allow_description=False):
 @st.composite
 def normalized_standard_strategy(draw, include_subdomain=None, include_strand=None):
     """Generate a NormalizedStandard."""
-    state = draw(st.text(min_size=2, max_size=2, alphabet=st.characters(whitelist_categories=("Lu",))))
+    # Generate valid two-letter uppercase country codes (A-Z only)
+    country = draw(st.text(min_size=2, max_size=2, alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+    state = draw(st.text(min_size=2, max_size=2, alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
     version_year = draw(st.integers(min_value=2000, max_value=2030))
     domain = draw(hierarchy_level_strategy())
     
@@ -43,12 +45,13 @@ def normalized_standard_strategy(draw, include_subdomain=None, include_strand=No
     strand = draw(hierarchy_level_strategy()) if include_strand else None
     indicator = draw(hierarchy_level_strategy(allow_description=True))
     
-    standard_id = f"{state}-{version_year}-{domain.code}-{indicator.code}"
+    standard_id = f"{country}-{state}-{version_year}-{domain.code}-{indicator.code}"
     source_page = draw(st.integers(min_value=1, max_value=1000))
     source_text = draw(st.text(min_size=1, max_size=500))
     
     return NormalizedStandard(
         standard_id=standard_id,
+        country=country,
         state=state,
         version_year=version_year,
         domain=domain,
@@ -83,6 +86,7 @@ def canonical_json_strategy(draw, valid=True):
         record = draw(canonical_json_strategy(valid=True))
         # Randomly remove a required field
         field_to_remove = draw(st.sampled_from([
+            "country",
             "state",
             "document",
             "standard",
@@ -169,7 +173,7 @@ def test_property_15_standard_id_uniqueness_enforcement(standards, duplicate_ind
     Property 15: Standard_ID Uniqueness Enforcement
     
     For any set of Canonical_JSON records containing two records with the same
-    standard_id, state, and version_year, the Validator SHALL detect and report
+    standard_id, country, state, and version_year, the Validator SHALL detect and report
     the uniqueness violation.
     
     Validates: Requirements 5.7
@@ -182,6 +186,7 @@ def test_property_15_standard_id_uniqueness_enforcement(standards, duplicate_ind
     original_index = (duplicate_index + 1) % len(standards)
     
     standards[duplicate_index].standard_id = standards[original_index].standard_id
+    standards[duplicate_index].country = standards[original_index].country
     standards[duplicate_index].state = standards[original_index].state
     standards[duplicate_index].version_year = standards[original_index].version_year
     
@@ -195,15 +200,24 @@ def test_property_15_standard_id_uniqueness_enforcement(standards, duplicate_ind
     
     records = [serialize_record(s, doc_meta) for s in standards]
     
-    # Build set of existing IDs from all but the last record
-    existing_ids = {r["standard"]["standard_id"] for r in records[:-1]}
+    # Build set of existing IDs from all but the last record (as tuples)
+    existing_ids = {
+        (r["country"], r["state"], r["document"]["version_year"], r["standard"]["standard_id"])
+        for r in records[:-1]
+    }
     
     # Validate the last record
     last_record = records[-1]
     result = validate_record(last_record, existing_ids=existing_ids)
     
-    # Check if the last record's ID is in existing_ids
-    if last_record["standard"]["standard_id"] in existing_ids:
+    # Check if the last record's key is in existing_ids
+    last_record_key = (
+        last_record["country"],
+        last_record["state"],
+        last_record["document"]["version_year"],
+        last_record["standard"]["standard_id"]
+    )
+    if last_record_key in existing_ids:
         assert not result.is_valid, "Duplicate standard_id should be detected"
         assert any(
             error.error_type == "uniqueness" for error in result.errors
@@ -232,6 +246,7 @@ def test_property_16_serialization_round_trip(standard, doc_meta):
     
     # Compare key fields (some fields may differ due to transformation)
     assert deserialized.standard_id == standard.standard_id
+    assert deserialized.country == standard.country
     assert deserialized.state == standard.state
     assert deserialized.version_year == standard.version_year
     

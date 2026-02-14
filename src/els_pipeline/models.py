@@ -3,6 +3,7 @@
 from typing import Optional, List, Dict, Any
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator
+import re
 
 
 class HierarchyLevelEnum(str, Enum):
@@ -115,6 +116,7 @@ class HierarchyNode(BaseModel):
 class NormalizedStandard(BaseModel):
     """Represents a fully normalized standard."""
     standard_id: str
+    country: str
     state: str
     version_year: int
     domain: HierarchyLevel
@@ -123,6 +125,14 @@ class NormalizedStandard(BaseModel):
     indicator: HierarchyLevel
     source_page: int = Field(gt=0)
     source_text: str
+    
+    @field_validator('country')
+    @classmethod
+    def validate_country_code(cls, v):
+        """Validate that country is a two-letter ISO 3166-1 alpha-2 code."""
+        if not re.match(r'^[A-Z]{2}$', v):
+            raise ValueError(f"country must be a two-letter uppercase ISO 3166-1 alpha-2 code, got: {v}")
+        return v
 
 
 class ParseResult(BaseModel):
@@ -154,11 +164,20 @@ class ValidationResult(BaseModel):
 class IngestionRequest(BaseModel):
     """Request for document ingestion."""
     file_path: str
+    country: str
     state: str
     version_year: int
     source_url: str
     publishing_agency: str
     filename: str
+    
+    @field_validator('country')
+    @classmethod
+    def validate_country_code(cls, v):
+        """Validate that country is a two-letter ISO 3166-1 alpha-2 code."""
+        if not re.match(r'^[A-Z]{2}$', v):
+            raise ValueError(f"country must be a two-letter uppercase ISO 3166-1 alpha-2 code, got: {v}")
+        return v
 
 
 class IngestionResult(BaseModel):
@@ -175,12 +194,21 @@ class IngestionResult(BaseModel):
 class EmbeddingRecord(BaseModel):
     """Represents an embedding record."""
     indicator_id: str
+    country: str
     state: str
     vector: List[float] = Field(min_length=1)
     embedding_model: str
     embedding_version: str
     input_text: str
     created_at: str
+    
+    @field_validator('country')
+    @classmethod
+    def validate_country_code(cls, v):
+        """Validate that country is a two-letter ISO 3166-1 alpha-2 code."""
+        if not re.match(r'^[A-Z]{2}$', v):
+            raise ValueError(f"country must be a two-letter uppercase ISO 3166-1 alpha-2 code, got: {v}")
+        return v
 
 
 class EmbeddingResult(BaseModel):
@@ -196,21 +224,39 @@ class Recommendation(BaseModel):
     """Represents a recommendation."""
     recommendation_id: str
     indicator_id: str
+    country: str
     state: str
     audience: AudienceEnum
     activity_description: str = Field(min_length=1)
     age_band: str
     generation_model: str
     created_at: str
+    
+    @field_validator('country')
+    @classmethod
+    def validate_country_code(cls, v):
+        """Validate that country is a two-letter ISO 3166-1 alpha-2 code."""
+        if not re.match(r'^[A-Z]{2}$', v):
+            raise ValueError(f"country must be a two-letter uppercase ISO 3166-1 alpha-2 code, got: {v}")
+        return v
 
 
 class RecommendationRequest(BaseModel):
     """Request for recommendation generation."""
+    country: str
     state: str
     indicator_ids: Optional[List[str]] = None
     domain_code: Optional[str] = None
     subdomain_code: Optional[str] = None
     age_band: str
+    
+    @field_validator('country')
+    @classmethod
+    def validate_country_code(cls, v):
+        """Validate that country is a two-letter ISO 3166-1 alpha-2 code."""
+        if not re.match(r'^[A-Z]{2}$', v):
+            raise ValueError(f"country must be a two-letter uppercase ISO 3166-1 alpha-2 code, got: {v}")
+        return v
 
 
 class RecommendationResult(BaseModel):
@@ -235,6 +281,9 @@ class PipelineRunResult(BaseModel):
     """Result of a complete pipeline run."""
     run_id: str
     document_s3_key: str
+    country: str = Field(min_length=2, max_length=2, pattern="^[A-Z]{2}$")
+    state: str
+    version_year: int
     stages: List[PipelineStageResult]
     total_indicators: int = Field(ge=0)
     total_validated: int = Field(ge=0)

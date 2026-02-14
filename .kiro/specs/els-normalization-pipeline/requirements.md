@@ -6,8 +6,8 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 
 ## Glossary
 
-- **ELS_Corpus**: The complete collection of normalized early learning standards across all ingested states
-- **Raw_Document**: An original PDF or HTML document published by a state Department of Education containing early learning standards
+- **ELS_Corpus**: The complete collection of normalized early learning standards across all ingested states and countries
+- **Raw_Document**: An original PDF or HTML document published by a state or regional Department of Education containing early learning standards
 - **Text_Extractor**: The component responsible for converting raw documents (PDF, images, tables) into machine-readable text using AWS Textract
 - **Structure_Detector**: The LLM-assisted component that identifies hierarchy levels, numbering patterns, heading levels, bullet structures, and table rows within extracted text
 - **Hierarchy_Parser**: The component that assembles detected structure elements into a normalized four-level tree (Domain → Subdomain → Strand → Indicator)
@@ -19,9 +19,11 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 - **Strand**: The third level of the normalized hierarchy representing a specific topic within a Subdomain
 - **Indicator**: The lowest assessable unit in the hierarchy — one measurable child-facing skill statement
 - **Age_Band**: A defined age range (e.g., "3-5", "0-3") to which a set of standards applies
-- **Standard_ID**: A deterministic, unique identifier for each indicator following the pattern `{STATE}-{YEAR}-{DOMAIN_CODE}-{INDICATOR_CODE}`
+- **Country_Code**: A two-letter ISO 3166-1 alpha-2 country code (e.g., "US", "CA", "AU") identifying the country of origin for the standards
+- **State_Code**: A state, province, or regional identifier within a country (e.g., "CA" for California in the US, "ON" for Ontario in Canada)
+- **Standard_ID**: A deterministic, unique identifier for each indicator following the pattern `{COUNTRY}-{STATE}-{YEAR}-{DOMAIN_CODE}-{INDICATOR_CODE}`
 - **Confidence_Score**: A numeric value (0.0–1.0) representing the Structure_Detector's certainty about a detected hierarchy element
-- **Crosswalk**: A future mapping between equivalent or related indicators across different states (out of scope for this feature, but the schema must support it)
+- **Crosswalk**: A future mapping between equivalent or related indicators across different states and countries (out of scope for this feature, but the schema must support it)
 - **S3_Raw_Bucket**: The S3 bucket `els-raw-documents` storing original unmodified source documents
 - **S3_Processed_Bucket**: The S3 bucket `els-processed-json` storing validated Canonical_JSON output
 - **S3_Embeddings_Bucket**: The S3 bucket `els-embeddings` storing generated embedding records
@@ -37,10 +39,11 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 
 #### Acceptance Criteria
 
-1. WHEN a Raw_Document is uploaded, THE Raw_Document_Ingester SHALL store the document in S3_Raw_Bucket under the path `{state}/{year}/{filename}` with S3 versioning enabled
-2. WHEN a Raw_Document is stored, THE Raw_Document_Ingester SHALL record metadata including state, version_year, source_url, publishing_agency, and upload_timestamp
-3. IF a Raw_Document with the same state, year, and filename already exists, THEN THE Raw_Document_Ingester SHALL create a new S3 version rather than overwriting the existing object
+1. WHEN a Raw_Document is uploaded, THE Raw_Document_Ingester SHALL store the document in S3_Raw_Bucket under the path `{country}/{state}/{year}/{filename}` with S3 versioning enabled
+2. WHEN a Raw_Document is stored, THE Raw_Document_Ingester SHALL record metadata including country, state, version_year, source_url, publishing_agency, and upload_timestamp
+3. IF a Raw_Document with the same country, state, year, and filename already exists, THEN THE Raw_Document_Ingester SHALL create a new S3 version rather than overwriting the existing object
 4. WHEN a Raw_Document is stored, THE Raw_Document_Ingester SHALL validate that the file is a supported format (PDF or HTML) and reject unsupported formats with a descriptive error
+5. WHEN a Raw_Document is stored, THE Raw_Document_Ingester SHALL validate that the country code is a valid two-letter ISO 3166-1 alpha-2 code and reject invalid codes with a descriptive error
 
 ### Requirement 2: Text Extraction
 
@@ -68,7 +71,7 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 
 ### Requirement 4: Hierarchy Parsing and Normalization
 
-**User Story:** As a data engineer, I want to normalize varying state terminology and hierarchy depths into a consistent four-level structure, so that all states conform to a single queryable schema.
+**User Story:** As a data engineer, I want to normalize varying state terminology and hierarchy depths into a consistent four-level structure, so that all states and countries conform to a single queryable schema.
 
 #### Acceptance Criteria
 
@@ -76,7 +79,7 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 2. WHEN a state document contains only two hierarchy levels, THE Hierarchy_Parser SHALL map the top level to Domain, the bottom level to Indicator, and set Subdomain and Strand to null
 3. WHEN a state document contains three hierarchy levels, THE Hierarchy_Parser SHALL map the top level to Domain, the middle level to Subdomain, the bottom level to Indicator, and set Strand to null
 4. WHEN a state document contains four or more hierarchy levels, THE Hierarchy_Parser SHALL map the top level to Domain, the second level to Subdomain, the third level to Strand, and the lowest assessable level to Indicator
-5. THE Hierarchy_Parser SHALL generate a deterministic Standard_ID for each Indicator following the pattern `{STATE}-{YEAR}-{DOMAIN_CODE}-{INDICATOR_CODE}`
+5. THE Hierarchy_Parser SHALL generate a deterministic Standard_ID for each Indicator following the pattern `{COUNTRY}-{STATE}-{YEAR}-{DOMAIN_CODE}-{INDICATOR_CODE}`
 6. WHEN assembling the hierarchy tree, THE Hierarchy_Parser SHALL validate that every Indicator has exactly one parent path to a Domain (no orphaned indicators)
 
 ### Requirement 5: Canonical JSON Schema and Validation
@@ -85,13 +88,13 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 
 #### Acceptance Criteria
 
-1. THE Validator SHALL enforce that every Canonical_JSON record contains the required top-level fields: state, document, standard, and metadata
+1. THE Validator SHALL enforce that every Canonical_JSON record contains the required top-level fields: country, state, document, standard, and metadata
 2. THE Validator SHALL enforce that the document object contains: title, version_year, source_url, age_band, and publishing_agency
 3. THE Validator SHALL enforce that the standard object contains: standard_id, domain (with code and name), and indicator (with code and description)
 4. THE Validator SHALL allow subdomain and strand to be null when the source hierarchy has fewer than four levels
-5. WHEN a Canonical_JSON record passes validation, THE Validator SHALL store the record in S3_Processed_Bucket under the path `{state}/{year}/{standard_id}.json`
+5. WHEN a Canonical_JSON record passes validation, THE Validator SHALL store the record in S3_Processed_Bucket under the path `{country}/{state}/{year}/{standard_id}.json`
 6. IF a Canonical_JSON record fails validation, THEN THE Validator SHALL return all validation errors with field paths and descriptions
-7. THE Validator SHALL enforce that standard_id values are unique within a given state and version_year combination
+7. THE Validator SHALL enforce that standard_id values are unique within a given country, state, and version_year combination
 8. THE Validator SHALL serialize Canonical_JSON records to JSON and THE Validator SHALL deserialize JSON back to Canonical_JSON records (round-trip fidelity)
 
 ### Requirement 6: Embedding Generation
@@ -108,14 +111,14 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 
 ### Requirement 7: Data Persistence and Querying
 
-**User Story:** As a data consumer, I want normalized standards and embeddings stored in a queryable database with vector search capability, so that I can retrieve and compare standards across states.
+**User Story:** As a data consumer, I want normalized standards and embeddings stored in a queryable database with vector search capability, so that I can retrieve and compare standards across states and countries.
 
 #### Acceptance Criteria
 
 1. THE Vector_Store SHALL use Aurora PostgreSQL with the pgvector extension to store indicator embeddings alongside relational standard data
 2. WHEN a Canonical_JSON record is persisted, THE Vector_Store SHALL store the full normalized hierarchy (domain, subdomain, strand, indicator) in relational tables
 3. WHEN a vector similarity query is executed, THE Vector_Store SHALL return matching indicators ranked by cosine similarity
-4. THE Vector_Store SHALL support filtering query results by state, age_band, domain, and version_year
+4. THE Vector_Store SHALL support filtering query results by country, state, age_band, domain, and version_year
 5. WHEN schema migrations are applied, THE Vector_Store SHALL use versioned migration scripts to maintain data integrity
 
 ### Requirement 8: Recommendation Generation for Parents and Teachers
@@ -130,7 +133,7 @@ This feature defines a machine-readable, cross-state Early Learning Standards (E
 4. WHEN recommendations are generated for a Domain or Subdomain level, THE Recommendation_Generator SHALL aggregate relevant Indicators under that level and produce holistic recommendations that span the grouped skills
 5. IF the LLM returns a recommendation that does not reference a concrete, actionable activity, THEN THE Recommendation_Generator SHALL retry with a refined prompt specifying that the output must describe a specific activity or strategy
 6. WHEN a recommendation is stored, THE Recommendation_Generator SHALL persist the recommendation record with a link to the source Indicator, the generation model identifier, and a created_at timestamp
-7. WHEN generating recommendations, THE Recommendation_Generator SHALL scope all context and output to the single state specified in the request and exclude indicators from other states
+7. WHEN generating recommendations, THE Recommendation_Generator SHALL scope all context and output to the single country and state specified in the request and exclude indicators from other countries or states
 
 ### Requirement 9: Pipeline Orchestration and Traceability
 

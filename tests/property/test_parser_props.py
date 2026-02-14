@@ -19,6 +19,12 @@ from src.els_pipeline.parser import (
 # Strategies for generating test data
 
 @st.composite
+def country_code(draw):
+    """Generate a two-letter ISO 3166-1 alpha-2 country code."""
+    return draw(st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=2, max_size=2))
+
+
+@st.composite
 def state_code(draw):
     """Generate a two-letter state code."""
     return draw(st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=2, max_size=2))
@@ -169,10 +175,11 @@ def four_level_hierarchy(draw):
         three_level_hierarchy(),
         four_level_hierarchy(),
     ),
+    country=country_code(),
     state=state_code(),
     year=version_year(),
 )
-def test_property_9_canonical_level_normalization(elements, state, year):
+def test_property_9_canonical_level_normalization(elements, country, state, year):
     """
     Property 9: Canonical Level Normalization
     
@@ -182,7 +189,7 @@ def test_property_9_canonical_level_normalization(elements, state, year):
     
     Validates: Requirements 4.1
     """
-    result = parse_hierarchy(elements, state, year)
+    result = parse_hierarchy(elements, country, state, year)
     
     # Check that all standards have only canonical levels
     valid_levels = {
@@ -206,10 +213,11 @@ def test_property_9_canonical_level_normalization(elements, state, year):
 # Property 10: Depth-Based Hierarchy Mapping
 @given(
     elements=two_level_hierarchy(),
+    country=country_code(),
     state=state_code(),
     year=version_year(),
 )
-def test_property_10_depth_based_hierarchy_mapping_2_levels(elements, state, year):
+def test_property_10_depth_based_hierarchy_mapping_2_levels(elements, country, state, year):
     """
     Property 10: Depth-Based Hierarchy Mapping (2 levels)
     
@@ -219,7 +227,7 @@ def test_property_10_depth_based_hierarchy_mapping_2_levels(elements, state, yea
     
     Validates: Requirements 4.2, 4.3, 4.4
     """
-    result = parse_hierarchy(elements, state, year)
+    result = parse_hierarchy(elements, country, state, year)
     
     for standard in result.standards:
         # Domain and indicator must be populated
@@ -233,10 +241,11 @@ def test_property_10_depth_based_hierarchy_mapping_2_levels(elements, state, yea
 
 @given(
     elements=three_level_hierarchy(),
+    country=country_code(),
     state=state_code(),
     year=version_year(),
 )
-def test_property_10_depth_based_hierarchy_mapping_3_levels(elements, state, year):
+def test_property_10_depth_based_hierarchy_mapping_3_levels(elements, country, state, year):
     """
     Property 10: Depth-Based Hierarchy Mapping (3 levels)
     
@@ -246,7 +255,7 @@ def test_property_10_depth_based_hierarchy_mapping_3_levels(elements, state, yea
     
     Validates: Requirements 4.2, 4.3, 4.4
     """
-    result = parse_hierarchy(elements, state, year)
+    result = parse_hierarchy(elements, country, state, year)
     
     for standard in result.standards:
         # Domain, subdomain, and indicator must be populated
@@ -260,10 +269,11 @@ def test_property_10_depth_based_hierarchy_mapping_3_levels(elements, state, yea
 
 @given(
     elements=four_level_hierarchy(),
+    country=country_code(),
     state=state_code(),
     year=version_year(),
 )
-def test_property_10_depth_based_hierarchy_mapping_4_levels(elements, state, year):
+def test_property_10_depth_based_hierarchy_mapping_4_levels(elements, country, state, year):
     """
     Property 10: Depth-Based Hierarchy Mapping (4+ levels)
     
@@ -272,7 +282,7 @@ def test_property_10_depth_based_hierarchy_mapping_4_levels(elements, state, yea
     
     Validates: Requirements 4.2, 4.3, 4.4
     """
-    result = parse_hierarchy(elements, state, year)
+    result = parse_hierarchy(elements, country, state, year)
     
     for standard in result.standards:
         # All four levels must be populated
@@ -284,29 +294,30 @@ def test_property_10_depth_based_hierarchy_mapping_4_levels(elements, state, yea
 
 # Property 11: Standard_ID Determinism
 @given(
+    country=country_code(),
     state=state_code(),
     year=version_year(),
     domain_code=st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=1, max_size=5),
     indicator_code=st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", min_size=1, max_size=10),
 )
-def test_property_11_standard_id_determinism(state, year, domain_code, indicator_code):
+def test_property_11_standard_id_determinism(country, state, year, domain_code, indicator_code):
     """
     Property 11: Standard_ID Determinism
     
-    For any given (state, version_year, domain_code, indicator_code) tuple,
+    For any given (country, state, version_year, domain_code, indicator_code) tuple,
     calling the Standard_ID generator twice SHALL produce identical results.
     
     Validates: Requirements 4.5
     """
     # Generate Standard_ID twice with the same inputs
-    id1 = generate_standard_id(state, year, domain_code, indicator_code)
-    id2 = generate_standard_id(state, year, domain_code, indicator_code)
+    id1 = generate_standard_id(country, state, year, domain_code, indicator_code)
+    id2 = generate_standard_id(country, state, year, domain_code, indicator_code)
     
     # They must be identical
     assert id1 == id2
     
     # Verify the format
-    expected_format = f"{state}-{year}-{domain_code}-{indicator_code}"
+    expected_format = f"{country}-{state}-{year}-{domain_code}-{indicator_code}"
     assert id1 == expected_format
 
 
@@ -317,10 +328,11 @@ def test_property_11_standard_id_determinism(state, year, domain_code, indicator
         three_level_hierarchy(),
         four_level_hierarchy(),
     ),
+    country=country_code(),
     state=state_code(),
     year=version_year(),
 )
-def test_property_12_no_orphaned_indicators(elements, state, year):
+def test_property_12_no_orphaned_indicators(elements, country, state, year):
     """
     Property 12: No Orphaned Indicators
     
@@ -330,7 +342,7 @@ def test_property_12_no_orphaned_indicators(elements, state, year):
     
     Validates: Requirements 4.6
     """
-    result = parse_hierarchy(elements, state, year)
+    result = parse_hierarchy(elements, country, state, year)
     
     # Every standard must have a non-null domain
     for standard in result.standards:
@@ -347,10 +359,11 @@ def test_property_12_no_orphaned_indicators(elements, state, year):
 
 
 @given(
+    country=country_code(),
     state=state_code(),
     year=version_year(),
 )
-def test_property_12_orphaned_indicators_without_domain(state, year):
+def test_property_12_orphaned_indicators_without_domain(country, state, year):
     """
     Property 12: No Orphaned Indicators (orphan detection)
     
@@ -372,7 +385,7 @@ def test_property_12_orphaned_indicators_without_domain(state, year):
     )
     
     elements = [orphan_indicator]
-    result = parse_hierarchy(elements, state, year)
+    result = parse_hierarchy(elements, country, state, year)
     
     # The orphan should be in orphaned_elements
     assert len(result.orphaned_elements) > 0

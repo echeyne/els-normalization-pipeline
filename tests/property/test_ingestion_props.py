@@ -15,9 +15,16 @@ from src.els_pipeline.ingester import ingest_document, validate_format, SUPPORTE
 from src.els_pipeline.models import IngestionRequest
 
 
+# Strategy for generating country codes (ISO 3166-1 alpha-2)
+country_code_strategy = st.text(
+    alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    min_size=2,
+    max_size=2
+)
+
 # Strategy for generating state codes
 state_code_strategy = st.text(
-    alphabet=st.characters(whitelist_categories=("Lu",)),
+    alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ',
     min_size=2,
     max_size=2
 )
@@ -43,6 +50,7 @@ unsupported_ext_strategy = st.text(
 
 
 @given(
+    country=country_code_strategy,
     state=state_code_strategy,
     year=year_strategy,
     source_url=url_strategy,
@@ -50,6 +58,7 @@ unsupported_ext_strategy = st.text(
     ext=supported_ext_strategy
 )
 def test_property_2_ingestion_metadata_completeness(
+    country: str,
     state: str,
     year: int,
     source_url: str,
@@ -60,7 +69,7 @@ def test_property_2_ingestion_metadata_completeness(
     Property 2: Ingestion Metadata Completeness
     
     For any successful ingestion result, the metadata dictionary SHALL contain
-    non-empty values for all required keys: state, version_year, source_url,
+    non-empty values for all required keys: country, state, version_year, source_url,
     publishing_agency, and upload_timestamp.
     
     Validates: Requirements 1.2
@@ -76,6 +85,7 @@ def test_property_2_ingestion_metadata_completeness(
         # Create ingestion request
         request = IngestionRequest(
             file_path=tmp_path,
+            country=country,
             state=state,
             version_year=year,
             source_url=source_url,
@@ -95,7 +105,7 @@ def test_property_2_ingestion_metadata_completeness(
             # Only check metadata completeness for successful ingestions
             if result.status == "success":
                 # Assert all required metadata keys are present
-                required_keys = {"state", "version_year", "source_url", "publishing_agency", "upload_timestamp"}
+                required_keys = {"country", "state", "version_year", "source_url", "publishing_agency", "upload_timestamp"}
                 assert required_keys.issubset(result.metadata.keys()), \
                     f"Missing required metadata keys: {required_keys - result.metadata.keys()}"
                 
@@ -106,6 +116,7 @@ def test_property_2_ingestion_metadata_completeness(
                     assert str(value).strip() != "", f"Metadata key '{key}' should not be empty"
                 
                 # Assert specific values match the request
+                assert result.metadata["country"] == country
                 assert result.metadata["state"] == state
                 assert result.metadata["version_year"] == str(year)
                 assert result.metadata["source_url"] == source_url

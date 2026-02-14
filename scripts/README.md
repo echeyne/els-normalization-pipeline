@@ -1,6 +1,57 @@
 # Testing Scripts
 
-This directory contains manual testing scripts for the ELS pipeline.
+This directory contains manual testing scripts and deployment tools for the ELS pipeline.
+
+## Deployment Script
+
+### deploy.sh
+
+Automated deployment script for the ELS Pipeline infrastructure with country code support.
+
+**Usage:**
+
+```bash
+# Deploy to dev environment (default)
+./scripts/deploy.sh
+
+# Deploy to staging
+./scripts/deploy.sh -e staging
+
+# Deploy to production in specific region
+./scripts/deploy.sh -e prod -r us-west-2
+
+# Show help
+./scripts/deploy.sh --help
+```
+
+**Features:**
+
+- Validates CloudFormation template
+- Deploys infrastructure stack
+- Creates environment-specific .env file with country-based path configuration
+- Displays S3 path structure examples
+- Verifies deployment success
+
+**Requirements:**
+
+- AWS CLI installed and configured
+- Python 3.9+
+- jq (for JSON parsing)
+- Valid AWS credentials with deployment permissions
+
+**Country Code Support:**
+The deployment script configures the infrastructure to support multi-country deployments:
+
+- S3 paths: `{country}/{state}/{year}/{identifier}`
+- Standard IDs: `{country}-{state}-{year}-{domain}-{indicator}`
+- Country codes validated against ISO 3166-1 alpha-2 format
+
+## Manual Testing Scripts
+
+All manual testing scripts now support country codes. When testing, use the country-based path structure:
+
+- Raw documents: `{country}/{state}/{year}/{filename}`
+- Processed JSON: `{country}/{state}/{year}/{standard_id}.json`
 
 ## Manual Ingester Test
 

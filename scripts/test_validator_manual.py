@@ -47,7 +47,8 @@ def print_section(title):
 def create_sample_standard():
     """Create a sample NormalizedStandard for testing."""
     return NormalizedStandard(
-        standard_id="CA-2021-LLD-1.2.a",
+        standard_id="US-CA-2021-LLD-1.2.a",
+        country="US",
         state="CA",
         version_year=2021,
         domain=HierarchyLevel(

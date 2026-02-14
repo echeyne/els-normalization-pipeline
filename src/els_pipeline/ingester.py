@@ -32,11 +32,12 @@ def validate_format(filename: str) -> tuple[bool, Optional[str]]:
     return True, None
 
 
-def construct_s3_path(state: str, year: int, filename: str) -> str:
+def construct_s3_path(country: str, state: str, year: int, filename: str) -> str:
     """
-    Construct S3 path following the pattern {state}/{year}/{filename}.
+    Construct S3 path following the pattern {country}/{state}/{year}/{filename}.
     
     Args:
+        country: Two-letter ISO 3166-1 alpha-2 country code
         state: Two-letter state code
         year: Version year
         filename: Document filename
@@ -45,16 +46,17 @@ def construct_s3_path(state: str, year: int, filename: str) -> str:
         S3 key path without leading slashes
     """
     # Ensure no leading/trailing slashes and no double slashes
+    country = country.strip("/")
     state = state.strip("/")
     filename = filename.strip("/")
-    return f"{state}/{year}/{filename}"
+    return f"{country}/{state}/{year}/{filename}"
 
 
 def ingest_document(request: IngestionRequest) -> IngestionResult:
     """
     Ingest a raw document into S3 with metadata.
     
-    Validates file format, constructs S3 path, uploads to S3 with versioning,
+    Validates file format and country code, constructs S3 path, uploads to S3 with versioning,
     and records metadata tags.
     
     Args:
@@ -75,11 +77,12 @@ def ingest_document(request: IngestionRequest) -> IngestionResult:
         )
     
     # Construct S3 path
-    s3_key = construct_s3_path(request.state, request.version_year, request.filename)
+    s3_key = construct_s3_path(request.country, request.state, request.version_year, request.filename)
     
     # Prepare metadata
     upload_timestamp = datetime.now(timezone.utc).isoformat()
     metadata = {
+        "country": request.country,
         "state": request.state,
         "version_year": str(request.version_year),
         "source_url": request.source_url,

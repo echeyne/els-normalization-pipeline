@@ -154,187 +154,248 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Verify JSON files in processed bucket
     - Include environment variable setup instructions
 
-- [ ] 8. Checkpoint - Ensure all tests pass
+- [-] 8. Refactor existing implementation to support country codes
+  - [x] 8.1 Update data models to include country field
+    - Add `country: str` field to `IngestionRequest`, `IngestionResult` metadata, `NormalizedStandard`, `EmbeddingRecord`, and `Recommendation` classes
+    - Update Pydantic validators to validate country codes (two-letter ISO 3166-1 alpha-2 format)
+    - Update all existing test fixtures and mock data to include country codes
+    - _Requirements: 1.2, 1.5, 4.5, 5.1, 6.3, 8.3_
+  - [x] 8.2 Update ingester to handle country codes
+    - Modify S3 path construction to use `{country}/{state}/{year}/{filename}` pattern
+    - Add country code validation in `ingest_document()` function
+    - Update ingestion metadata to include country field
+    - Update property tests for S3 path construction (Property 1) to include country
+    - Update property tests for metadata completeness (Property 2) to include country
+    - _Requirements: 1.1, 1.2, 1.5_
+  - [x] 8.3 Update parser to include country in Standard_ID generation
+    - Modify `parse_hierarchy()` to accept country parameter
+    - Update Standard_ID generation to use `{country}-{state}-{year}-{domain_code}-{indicator_code}` pattern
+    - Update property tests for Standard_ID determinism (Property 11) to include country
+    - _Requirements: 4.5_
+  - [x] 8.4 Update validator to include country in schema and uniqueness checks
+    - Update JSON schema validation to require country field
+    - Modify uniqueness check to enforce uniqueness within country+state+year combination
+    - Update S3 storage path to `{country}/{state}/{year}/{standard_id}.json`
+    - Update property tests for schema validation (Property 13) to include country
+    - Update property tests for uniqueness enforcement (Property 15) to include country
+    - _Requirements: 5.1, 5.5, 5.7_
+  - [x] 8.5 Update database schema and data access layer
+    - Add country column to documents, embeddings, recommendations, and pipeline_runs tables
+    - Update all database indexes to include country where appropriate
+    - Modify `persist_standard()`, `persist_embedding()`, `persist_recommendation()` to handle country field
+    - Update `get_indicators_by_country_state()` function (renamed from `get_indicators_by_state()`)
+    - Update query filters to support country filtering
+    - Create database migration script for adding country columns
+    - _Requirements: 7.1, 7.2, 7.4_
+  - [x] 8.6 Update embedding generator to include country
+    - Modify `EmbeddingRecord` to include country field
+    - Update S3 storage and database persistence to include country
+    - Update property tests for embedding record completeness (Property 18) to include country
+    - _Requirements: 6.3, 6.4_
+  - [x] 8.7 Update recommendation generator to include country scoping
+    - Modify `RecommendationRequest` to include country parameter
+    - Update recommendation queries to filter by both country and state
+    - Update property tests for recommendation completeness (Property 23) to include country
+    - Update property tests for state scoping (Property 25) to include country scoping
+    - _Requirements: 8.3, 8.6, 8.7_
+  - [x] 8.8 Update pipeline orchestrator to handle country parameter
+    - Modify `start_pipeline()` to accept country parameter
+    - Update pipeline_runs table tracking to include country
+    - Update all Lambda handlers to pass country through the pipeline
+    - _Requirements: 9.1, 9.2_
+  - [x] 8.9 Update CloudFormation template and deployment scripts
+    - Update all Lambda environment variables and configurations to support country codes
+    - Update S3 bucket structure documentation
+    - Update deployment scripts to handle country-based paths
+    - _Requirements: 1.1, 1.3_
+  - [x] 8.10 Update all integration tests and manual test scripts
+    - Update all integration tests to include country codes in test data
+    - Update manual test scripts (test_ingester_manual.py, test_extractor_manual.py, test_detector_manual.py, test_parser_manual.py, test_validator_manual.py) to accept and use country parameter
+    - Update end-to-end tests to verify country code flow through entire pipeline
+    - _Requirements: all_
+
+- [ ] 9. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Implement Data Access Layer and Query Support
-  - [ ] 9.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_state()`
+- [ ] 10. Implement Data Access Layer and Query Support
+  - [ ] 10.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_country_state()`
     - Use psycopg2 for Aurora PostgreSQL connections
     - Implement cosine similarity search using pgvector operators
-    - Support filtering by state, age_band, domain, version_year
+    - Support filtering by country, state, age_band, domain, version_year
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
-  - [ ] 9.2 Create database migration scripts (SQL files) for all tables, indexes, and the pgvector extension
-    - Include the full schema from the design document
+  - [ ] 10.2 Create database migration scripts (SQL files) for all tables, indexes, and the pgvector extension
+    - Include the full schema from the design document with country columns
     - Version migration files sequentially (001_initial_schema.sql, etc.)
     - _Requirements: 7.5_
-  - [ ] 9.3 Add CloudFormation resources for Aurora PostgreSQL Serverless cluster with pgvector extension, VPC, security groups, and Secrets Manager for credentials
+  - [ ] 10.3 Add CloudFormation resources for Aurora PostgreSQL Serverless cluster with pgvector extension, VPC, security groups, and Secrets Manager for credentials
     - _Requirements: 7.1, 7.5_
-  - [ ] 9.4 Write property tests for query layer
+  - [ ] 10.4 Write property tests for query layer
     - **Property 19: Vector Similarity Ordering** — Results ordered by decreasing cosine similarity
     - **Validates: Requirements 7.3**
-    - **Property 20: Query Filter Correctness** — Filtered results match the specified filter values
+    - **Property 20: Query Filter Correctness** — Filtered results match the specified filter values (including country)
     - **Validates: Requirements 7.4**
-  - [ ] 9.5 Write integration tests for data access layer with test database
+  - [ ] 10.5 Write integration tests for data access layer with test database
     - Test database connection and connection pooling
     - Test CRUD operations for standards, embeddings, recommendations
     - Test vector similarity search with sample embeddings
-    - Test query filters and pagination
-  - [ ] 9.6 Create manual AWS test script for database operations
+    - Test query filters (including country) and pagination
+  - [ ] 10.6 Create manual AWS test script for database operations
     - Script: `scripts/test_db_manual.py`
     - Test with real Aurora PostgreSQL cluster
     - Verify pgvector extension and similarity search
     - Include database connection setup instructions
 
-- [ ] 10. Checkpoint - Ensure all tests pass
+- [ ] 11. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Implement Pipeline Orchestrator (without embeddings and recommendations)
-  - [ ] 11.1 Implement `orchestrator.py` with `start_pipeline()`, `rerun_stage()`, and `get_pipeline_status()` functions
+- [ ] 12. Implement Pipeline Orchestrator (without embeddings and recommendations)
+  - [ ] 12.1 Implement `orchestrator.py` with `start_pipeline()`, `rerun_stage()`, and `get_pipeline_status()` functions
     - Chain stages in order: ingestion → extraction → detection → parsing → validation → persistence
     - Record PipelineStageResult for each stage (name, status, duration_ms, output_artifact)
     - On failure: halt, record error, preserve partial results
     - Track totals: indicators extracted, validated
     - Support re-running individual stages by reading previous stage output from S3
+    - Include country parameter in pipeline execution
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
-  - [ ] 11.2 Create AWS Step Functions state machine definition in CloudFormation wiring Lambda handlers for core pipeline stages
+  - [ ] 12.2 Create AWS Step Functions state machine definition in CloudFormation wiring Lambda handlers for core pipeline stages
     - Define states for each pipeline stage with error catching and retry configuration
     - Configure SNS topic and subscription for pipeline completion and failure notifications
     - Add Step Functions state machine, SNS topic, and execution IAM role to CloudFormation template
     - _Requirements: 9.1, 9.3_
-  - [ ] 11.3 Write property tests for pipeline orchestrator
+  - [ ] 12.3 Write property tests for pipeline orchestrator
     - **Property 26: Pipeline Stage Result Completeness** — Every stage result has stage_name, status, duration_ms, output_artifact
     - **Validates: Requirements 9.2**
     - **Property 27: Pipeline Run Counts Invariant** — total_validated <= total_indicators
     - **Validates: Requirements 9.4**
-  - [ ] 11.4 Write integration tests for pipeline orchestrator
+  - [ ] 12.4 Write integration tests for pipeline orchestrator
     - Test full pipeline execution with mocked stage functions
     - Test error handling and partial result preservation
     - Test stage re-run functionality
     - Test pipeline status tracking
-  - [ ] 11.5 Create manual AWS test script for core pipeline
+  - [ ] 12.5 Create manual AWS test script for core pipeline
     - Script: `scripts/test_pipeline_manual.py`
     - Test complete pipeline execution with Step Functions (without embeddings/recommendations)
     - Monitor execution status and stage transitions
     - Verify SNS notifications
     - Include environment variable setup instructions
 
-- [ ] 12. Integration wiring and Lambda handlers (core pipeline)
-  - [ ] 12.1 Create Lambda handler entry points for core pipeline stages
+- [ ] 13. Integration wiring and Lambda handlers (core pipeline)
+  - [ ] 13.1 Create Lambda handler entry points for core pipeline stages
     - Each handler: parse event, call module function, return result for Step Functions
     - Shared error handling wrapper for consistent error reporting
     - Handlers for: ingestion, extraction, detection, parsing, validation
     - _Requirements: 9.1_
-  - [ ] 12.2 Consolidate and validate the CloudFormation template for core pipeline
+  - [ ] 13.2 Consolidate and validate the CloudFormation template for core pipeline
     - Ensure all resources from previous tasks are correctly wired (S3 buckets, Lambdas, Step Functions, Aurora, SNS, IAM roles, VPC)
     - Add CloudFormation outputs for key resource ARNs and endpoints
     - Validate template with `aws cloudformation validate-template`
     - Add a deploy script (`scripts/deploy.sh`) that packages Lambda code and deploys the stack
     - _Requirements: 1.1, 1.3, 7.1, 9.1_
-  - [ ] 12.3 Write end-to-end integration tests for core pipeline
+  - [ ] 13.3 Write end-to-end integration tests for core pipeline
     - Test complete pipeline with core stages using mocked AWS services
     - Test error propagation and recovery
     - Test data flow between stages
     - Verify final outputs in all storage locations
-  - [ ] 12.4 Create comprehensive AWS deployment and testing guide for core pipeline
+  - [ ] 13.4 Create comprehensive AWS deployment and testing guide for core pipeline
     - Document: `documentation/AWS_TESTING.md`
     - Include pre-deployment checklist
     - Step-by-step deployment instructions
     - Post-deployment verification steps
     - Troubleshooting guide for common issues
 
-- [ ] 13. Checkpoint - Ensure all tests pass
+- [ ] 14. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14. Implement Embedding Generator
-  - [ ] 14.1 Implement `embedder.py` with `build_embedding_input()` and `generate_embeddings()` functions
+- [ ] 15. Implement Embedding Generator
+  - [ ] 15.1 Implement `embedder.py` with `build_embedding_input()` and `generate_embeddings()` functions
     - Construct input text: concatenate domain name, subdomain name (if present), strand name (if present), indicator description, age band — omit null levels
     - Call Amazon Titan Embed Text v2 via Bedrock
-    - Build EmbeddingRecord with indicator_id, state, vector, model ID, version, timestamp
+    - Build EmbeddingRecord with indicator_id, country, state, vector, model ID, version, timestamp
     - Store to S3 embeddings bucket and persist to Aurora PostgreSQL
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
-  - [ ] 14.2 Add CloudFormation resources for Embedding Generator Lambda with Bedrock invoke permissions and S3 embeddings bucket (`els-embeddings`) with versioning
+  - [ ] 15.2 Add CloudFormation resources for Embedding Generator Lambda with Bedrock invoke permissions and S3 embeddings bucket (`els-embeddings`) with versioning
     - _Requirements: 6.2, 6.4_
-  - [ ] 14.3 Write property tests for embedding generation
+  - [ ] 15.3 Write property tests for embedding generation
     - **Property 17: Embedding Input Text Construction** — Input text contains domain, indicator desc, age band; includes subdomain/strand only when non-null
     - **Validates: Requirements 6.1**
-  - [ ] 14.4 Write integration tests for embedding generator with mocked Bedrock and S3
+  - [ ] 15.4 Write integration tests for embedding generator with mocked Bedrock and S3
     - Test embedding input text construction with various hierarchy depths
     - Test Bedrock API calls with mocked responses
     - Test S3 storage of embedding records
     - Test error handling for API failures
-  - [ ] 14.5 Create manual AWS test script for embedding generator
+  - [ ] 15.5 Create manual AWS test script for embedding generator
     - Script: `scripts/test_embedder_manual.py`
     - Test with real Bedrock Titan Embed model
     - Verify embeddings stored in S3 and database
     - Include environment variable setup instructions
 
-- [ ] 15. Implement Recommendation Generator
-  - [ ] 15.1 Implement `recommender.py` with `generate_recommendations()` function
+- [ ] 16. Implement Recommendation Generator
+  - [ ] 16.1 Implement `recommender.py` with `generate_recommendations()` function
     - Build LLM prompt including indicator description, parent hierarchy, age band
-    - Scope all indicator queries to the requested state only
+    - Scope all indicator queries to the requested country and state only
     - Parse LLM response into Recommendation objects
     - Implement actionability checker: verify response contains action verb + specific noun
     - Retry with refined prompt up to 2 times if non-actionable
     - Support domain/subdomain-level aggregation: fetch grouped indicators, produce holistic recommendations
     - Ensure at least one parent-facing and one teacher-facing recommendation per indicator request
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
-  - [ ] 15.2 Add CloudFormation resources for Recommendation Generator Lambda with Bedrock invoke permissions and Aurora access
+  - [ ] 16.2 Add CloudFormation resources for Recommendation Generator Lambda with Bedrock invoke permissions and Aurora access
     - _Requirements: 8.2, 8.6_
-  - [ ] 15.3 Write property tests for recommendation generation
+  - [ ] 16.3 Write property tests for recommendation generation
     - **Property 21: Recommendation Audience Coverage** — At least one parent and one teacher recommendation per request
     - **Validates: Requirements 8.1**
     - **Property 22: Recommendation Prompt Context** — Prompt includes indicator desc, hierarchy names, age band
     - **Validates: Requirements 8.2**
     - **Property 24: Actionability Validation** — Checker returns True only for text with action verb + specific noun
     - **Validates: Requirements 8.5**
-    - **Property 25: Recommendation State Scoping** — All recommendations reference indicators from requested state only
+    - **Property 25: Recommendation State Scoping** — All recommendations reference indicators from requested country and state only
     - **Validates: Requirements 8.7**
-  - [ ] 15.4 Write integration tests for recommendation generator with mocked Bedrock
+  - [ ] 16.4 Write integration tests for recommendation generator with mocked Bedrock
     - Test recommendation generation with mocked LLM responses
     - Test audience coverage (parent and teacher)
     - Test actionability checker with various inputs
     - Test retry logic for non-actionable responses
     - Test domain/subdomain aggregation
-  - [ ] 15.5 Create manual AWS test script for recommendation generator
+  - [ ] 16.5 Create manual AWS test script for recommendation generator
     - Script: `scripts/test_recommender_manual.py`
     - Test with real Bedrock Claude model
     - Verify recommendations stored in database
-    - Test with various states and age bands
+    - Test with various countries, states, and age bands
     - Include environment variable setup instructions
 
-- [ ] 16. Checkpoint - Ensure all tests pass
+- [ ] 17. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 17. Integrate Embedding and Recommendation stages into full pipeline
-  - [ ] 17.1 Update `orchestrator.py` to include embedding and recommendation stages
+- [ ] 18. Integrate Embedding and Recommendation stages into full pipeline
+  - [ ] 18.1 Update `orchestrator.py` to include embedding and recommendation stages
     - Extend pipeline chain: ingestion → extraction → detection → parsing → validation → embedding → recommendation → persistence
     - Update tracking totals to include: indicators embedded, recommendations generated
     - Update property tests to include: total_embedded <= total_validated
     - _Requirements: 9.1, 9.2, 9.4_
-  - [ ] 17.2 Update Step Functions state machine to include embedding and recommendation stages
+  - [ ] 18.2 Update Step Functions state machine to include embedding and recommendation stages
     - Add embedding and recommendation Lambda states to the state machine
     - Update error handling and retry configuration for new stages
     - _Requirements: 9.1, 9.3_
-  - [ ] 17.3 Create Lambda handler entry points for embedding and recommendation stages
+  - [ ] 18.3 Create Lambda handler entry points for embedding and recommendation stages
     - Handlers for: embedding generation, recommendation generation
     - Use shared error handling wrapper
     - _Requirements: 9.1_
-  - [ ] 17.4 Update CloudFormation template with embedding and recommendation resources
+  - [ ] 18.4 Update CloudFormation template with embedding and recommendation resources
     - Ensure all new resources are correctly wired
     - Update outputs to include new resource ARNs
     - Validate updated template
     - _Requirements: 1.1, 1.3, 9.1_
-  - [ ] 17.5 Write end-to-end integration tests for complete pipeline
+  - [ ] 18.5 Write end-to-end integration tests for complete pipeline
     - Test full pipeline with all stages including embeddings and recommendations
     - Test error propagation and recovery across all stages
     - Test data flow through entire pipeline
     - Verify final outputs in all storage locations
-  - [ ] 17.6 Update AWS deployment and testing guide
+  - [ ] 18.6 Update AWS deployment and testing guide
     - Update `documentation/AWS_TESTING.md` with embedding and recommendation testing steps
     - Add verification steps for embeddings and recommendations
     - Update troubleshooting guide
 
-- [ ] 18. Final checkpoint - Ensure all tests pass
+- [ ] 19. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

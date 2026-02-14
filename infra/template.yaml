@@ -1,5 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "ELS Normalization Pipeline Infrastructure"
+Description: |
+  ELS Normalization Pipeline Infrastructure
+
+  S3 Bucket Structure:
+  - Raw Documents: {country}/{state}/{year}/{filename}
+  - Processed JSON: {country}/{state}/{year}/{standard_id}.json
+  - Embeddings: {country}/{state}/{year}/embeddings/{standard_id}.json
+
+  All resources support multi-country deployments with country codes
+  following ISO 3166-1 alpha-2 format (e.g., US, CA, AU).
 
 Parameters:
   EnvironmentName:
@@ -18,6 +27,9 @@ Parameters:
 
 Resources:
   # S3 Raw Documents Bucket
+  # Stores original documents with country-based path structure:
+  # {country}/{state}/{year}/{filename}
+  # Example: US/CA/2021/california_preschool_standards.pdf
   RawDocumentsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -177,6 +189,9 @@ Resources:
           Value: ELS-Pipeline
 
   # S3 Processed JSON Bucket
+  # Stores validated Canonical_JSON records with country-based path structure:
+  # {country}/{state}/{year}/{standard_id}.json
+  # Example: US/CA/2021/US-CA-2021-LLD-1.2.json
   ProcessedJsonBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -235,6 +250,16 @@ Resources:
   # Lambda functions will be added in subsequent tasks
   # Step Functions state machine will be added in subsequent tasks
   # Aurora PostgreSQL cluster will be added in subsequent tasks
+
+  # Lambda Environment Variables Configuration
+  # All Lambda functions should include these environment variables:
+  # - ELS_RAW_BUCKET: !Ref RawDocumentsBucket
+  # - ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
+  # - ELS_EMBEDDINGS_BUCKET: !Ref EmbeddingsBucket (when created)
+  # - ENVIRONMENT: !Ref EnvironmentName
+  # - AWS_REGION: !Ref AWS::Region
+  # - COUNTRY_CODE_VALIDATION: "enabled" (validates ISO 3166-1 alpha-2)
+  # - S3_PATH_PATTERN: "{country}/{state}/{year}/{identifier}"
 
   # Placeholder for future resources
   PlaceholderParameter:

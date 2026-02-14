@@ -28,7 +28,8 @@ def s3_client():
 def sample_standard():
     """Create a sample NormalizedStandard."""
     return NormalizedStandard(
-        standard_id="CA-2021-LLD-1.2",
+        standard_id="US-CA-2021-LLD-1.2",
+        country="US",
         state="CA",
         version_year=2021,
         domain=HierarchyLevel(
@@ -92,6 +93,18 @@ def test_schema_validation_with_missing_state(sample_standard, sample_document_m
     assert any(error.field_path == "state" for error in result.errors)
 
 
+def test_schema_validation_with_missing_country(sample_standard, sample_document_meta):
+    """Test schema validation with missing country field."""
+    record = serialize_record(sample_standard, sample_document_meta)
+    del record["country"]
+    
+    result = validate_record(record)
+    
+    assert result.is_valid is False
+    assert len(result.errors) > 0
+    assert any(error.field_path == "country" for error in result.errors)
+
+
 def test_schema_validation_with_missing_document_title(sample_standard, sample_document_meta):
     """Test schema validation with missing document.title."""
     record = serialize_record(sample_standard, sample_document_meta)
@@ -144,7 +157,8 @@ def test_schema_validation_with_null_subdomain(sample_standard, sample_document_
     """Test schema validation allows null subdomain."""
     # Create a standard without subdomain
     standard = NormalizedStandard(
-        standard_id="CA-2021-LLD-1",
+        standard_id="US-CA-2021-LLD-1",
+        country="US",
         state="CA",
         version_year=2021,
         domain=HierarchyLevel(code="LLD", name="Language and Literacy Development"),
@@ -184,7 +198,8 @@ def test_serialization_round_trip_with_full_hierarchy(sample_standard, sample_do
 def test_serialization_round_trip_with_minimal_hierarchy(sample_document_meta):
     """Test serialization and deserialization with minimal hierarchy (2 levels)."""
     standard = NormalizedStandard(
-        standard_id="TX-2020-MATH-1",
+        standard_id="US-TX-2020-MATH-1",
+        country="US",
         state="TX",
         version_year=2020,
         domain=HierarchyLevel(code="MATH", name="Mathematics"),
@@ -199,6 +214,7 @@ def test_serialization_round_trip_with_minimal_hierarchy(sample_document_meta):
     deserialized = deserialize_record(canonical)
     
     assert deserialized.standard_id == standard.standard_id
+    assert deserialized.country == standard.country
     assert deserialized.subdomain is None
     assert deserialized.strand is None
 
@@ -212,7 +228,12 @@ def test_standard_id_uniqueness_checking(sample_standard, sample_document_meta):
     assert result1.is_valid is True
     
     # Second validation with the same ID in existing set - should fail
-    existing_ids = {sample_standard.standard_id}
+    existing_ids = {(
+        sample_standard.country,
+        sample_standard.state,
+        sample_standard.version_year,
+        sample_standard.standard_id
+    )}
     result2 = validate_record(record, existing_ids=existing_ids)
     assert result2.is_valid is False
     assert any(error.error_type == "uniqueness" for error in result2.errors)
@@ -225,8 +246,8 @@ def test_s3_storage_of_validated_record(s3_client, sample_standard, sample_docum
     # Store the record
     s3_key = store_validated_record(record, s3_client=s3_client)
     
-    # Verify the S3 key format
-    expected_key = f"{sample_standard.state}/{sample_standard.version_year}/{sample_standard.standard_id}.json"
+    # Verify the S3 key format includes country
+    expected_key = f"{sample_standard.country}/{sample_standard.state}/{sample_standard.version_year}/{sample_standard.standard_id}.json"
     assert s3_key == expected_key
     
     # Verify the record was stored
@@ -236,6 +257,7 @@ def test_s3_storage_of_validated_record(s3_client, sample_standard, sample_docum
     )
     
     stored_data = json.loads(response["Body"].read())
+    assert stored_data["country"] == sample_standard.country
     assert stored_data["state"] == sample_standard.state
     assert stored_data["standard"]["standard_id"] == sample_standard.standard_id
 
@@ -245,6 +267,7 @@ def test_multiple_validation_errors_collected(sample_standard, sample_document_m
     record = serialize_record(sample_standard, sample_document_meta)
     
     # Remove multiple required fields
+    del record["country"]
     del record["state"]
     del record["document"]["title"]
     del record["standard"]["standard_id"]
@@ -252,10 +275,11 @@ def test_multiple_validation_errors_collected(sample_standard, sample_document_m
     result = validate_record(record)
     
     assert result.is_valid is False
-    assert len(result.errors) >= 3
+    assert len(result.errors) >= 4
     
     # Check that all errors are reported
     field_paths = {error.field_path for error in result.errors}
+    assert "country" in field_paths
     assert "state" in field_paths
     assert "document.title" in field_paths
     assert "standard.standard_id" in field_paths

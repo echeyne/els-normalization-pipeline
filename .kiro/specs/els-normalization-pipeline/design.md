@@ -2,9 +2,9 @@
 
 ## Overview
 
-The ELS Normalization Pipeline transforms raw early learning standards documents from state Departments of Education into a machine-readable, queryable corpus with a consistent four-level hierarchy. The system uses AWS services (S3, Textract, Bedrock, Aurora PostgreSQL with pgvector) to ingest PDFs, extract text, detect structure via LLM-assisted parsing, normalize terminology, validate against a canonical schema, generate embeddings, produce parent/teacher recommendations, and persist everything in a versioned data store.
+The ELS Normalization Pipeline transforms raw early learning standards documents from state and regional Departments of Education into a machine-readable, queryable corpus with a consistent four-level hierarchy. The system uses AWS services (S3, Textract, Bedrock, Aurora PostgreSQL with pgvector) to ingest PDFs, extract text, detect structure via LLM-assisted parsing, normalize terminology, validate against a canonical schema, generate embeddings, produce parent/teacher recommendations, and persist everything in a versioned data store.
 
-The pipeline is implemented in Python and deployed as a set of AWS Lambda functions orchestrated by AWS Step Functions. Each stage is independently re-runnable and produces traceable artifacts.
+The pipeline is implemented in Python and deployed as a set of AWS Lambda functions orchestrated by AWS Step Functions. Each stage is independently re-runnable and produces traceable artifacts. The system supports standards from multiple countries, with country codes included in all identifiers and metadata.
 
 ## Architecture
 
@@ -47,12 +47,13 @@ graph TD
 
 ### 1. Raw Document Ingester (`ingester.py`)
 
-Receives an upload event (S3 trigger or API call), validates the file format, stores the document in S3 with the path convention `{state}/{year}/{filename}`, and writes ingestion metadata.
+Receives an upload event (S3 trigger or API call), validates the file format and country code, stores the document in S3 with the path convention `{country}/{state}/{year}/{filename}`, and writes ingestion metadata.
 
 ```python
 class IngestionRequest:
     file_path: str          # Local or presigned URL path
-    state: str              # Two-letter state code
+    country: str            # Two-letter ISO 3166-1 alpha-2 country code
+    state: str              # State/province/region code
     version_year: int
     source_url: str
     publishing_agency: str
@@ -61,7 +62,7 @@ class IngestionRequest:
 class IngestionResult:
     s3_key: str
     s3_version_id: str
-    metadata: dict          # state, version_year, source_url, publishing_agency, upload_timestamp
+    metadata: dict          # country, state, version_year, source_url, publishing_agency, upload_timestamp
     status: str             # "success" | "error"
     error: str | None
 
@@ -69,6 +70,8 @@ def ingest_document(request: IngestionRequest) -> IngestionResult: ...
 ```
 
 **Format validation**: Checks file extension and MIME type. Supported: `.pdf`, `.html`. Returns descriptive error for unsupported formats.
+
+**Country code validation**: Validates that the country code is a valid two-letter ISO 3166-1 alpha-2 code. Returns descriptive error for invalid codes.
 
 ### 2. Text Extractor (`extractor.py`)
 
@@ -140,7 +143,8 @@ class HierarchyNode:
     children: list["HierarchyNode"]
 
 class NormalizedStandard:
-    standard_id: str        # e.g., "CA-2021-LLD-1.2"
+    standard_id: str        # e.g., "US-CA-2021-LLD-1.2"
+    country: str
     state: str
     version_year: int
     domain: HierarchyLevel
@@ -163,6 +167,7 @@ class ParseResult:
 
 def parse_hierarchy(
     elements: list[DetectedElement],
+    country: str,
     state: str,
     version_year: int
 ) -> ParseResult: ...
@@ -175,7 +180,7 @@ def parse_hierarchy(
 - 3 levels → top = Domain, middle = Subdomain, bottom = Indicator, Strand = null
 - 4+ levels → top = Domain, 2nd = Subdomain, 3rd = Strand, lowest = Indicator
 
-**Standard_ID generation**: `f"{state}-{version_year}-{domain.code}-{indicator.code}"` — deterministic and reproducible from the same input.
+**Standard_ID generation**: `f"{country}-{state}-{version_year}-{domain.code}-{indicator.code}"` — deterministic and reproducible from the same input.
 
 **Orphan detection**: After tree assembly, any element that does not have a path to a Domain is reported in `orphaned_elements`.
 
@@ -201,7 +206,7 @@ def deserialize_record(json_data: dict) -> NormalizedStandard: ...
 
 **Schema enforcement**: Uses JSON Schema validation for structural checks, plus custom rules for:
 
-- Standard_ID uniqueness within state+year
+- Standard_ID uniqueness within country+state+year
 - Required fields at each level
 - Nullable subdomain/strand only when hierarchy depth < 4
 
@@ -214,6 +219,7 @@ Constructs contextual embedding input text and calls Amazon Titan Embed Text v1.
 ```python
 class EmbeddingRecord:
     indicator_id: str
+    country: str
     state: str
     vector: list[float]
     embedding_model: str    # "amazon.titan-embed-text-v1"
@@ -246,6 +252,7 @@ Produces actionable, audience-specific recommendations for parents and teachers.
 class Recommendation:
     recommendation_id: str
     indicator_id: str
+    country: str
     state: str
     audience: str           # "parent" | "teacher"
     activity_description: str
@@ -254,6 +261,7 @@ class Recommendation:
     created_at: str
 
 class RecommendationRequest:
+    country: str
     state: str
     indicator_ids: list[str] | None   # Specific indicators, or None for domain/subdomain level
     domain_code: str | None           # For domain-level aggregation
@@ -268,7 +276,7 @@ class RecommendationResult:
 def generate_recommendations(request: RecommendationRequest) -> RecommendationResult: ...
 ```
 
-**State scoping**: The generator queries only indicators matching `request.state` — no cross-state data is included in the LLM context or output.
+**Country and state scoping**: The generator queries only indicators matching `request.country` and `request.state` — no cross-country or cross-state data is included in the LLM context or output.
 
 **Actionability enforcement**: The LLM prompt explicitly requires a concrete activity or strategy. If the response lacks one (detected via keyword heuristics: must contain an action verb and a specific noun), the generator retries with a refined prompt up to 2 additional attempts.
 
@@ -296,7 +304,7 @@ class PipelineRunResult:
     total_recommendations: int
     status: str             # "completed" | "failed" | "partial"
 
-def start_pipeline(s3_key: str, state: str, version_year: int) -> str: ...  # Returns run_id
+def start_pipeline(s3_key: str, country: str, state: str, version_year: int) -> str: ...  # Returns run_id
 def rerun_stage(run_id: str, stage_name: str) -> PipelineStageResult: ...
 def get_pipeline_status(run_id: str) -> PipelineRunResult: ...
 ```
@@ -316,7 +324,7 @@ def persist_standard(standard: NormalizedStandard, document_meta: dict) -> None:
 def persist_embedding(record: EmbeddingRecord) -> None: ...
 def persist_recommendation(rec: Recommendation) -> None: ...
 def query_similar_indicators(vector: list[float], top_k: int, filters: dict) -> list[dict]: ...
-def get_indicators_by_state(state: str, domain_code: str | None, subdomain_code: str | None) -> list[dict]: ...
+def get_indicators_by_country_state(country: str, state: str, domain_code: str | None, subdomain_code: str | None) -> list[dict]: ...
 ```
 
 ## Data Models
@@ -325,6 +333,7 @@ def get_indicators_by_state(state: str, domain_code: str | None, subdomain_code:
 
 ```json
 {
+  "country": "US",
   "state": "CA",
   "document": {
     "title": "California Preschool Learning Foundations",
@@ -334,7 +343,7 @@ def get_indicators_by_state(state: str, domain_code: str | None, subdomain_code:
     "publishing_agency": "California Department of Education"
   },
   "standard": {
-    "standard_id": "CA-2021-LLD-1.2",
+    "standard_id": "US-CA-2021-LLD-1.2",
     "domain": {
       "code": "LLD",
       "name": "Language and Literacy Development"
@@ -367,14 +376,15 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE documents (
     id SERIAL PRIMARY KEY,
-    state VARCHAR(2) NOT NULL,
+    country VARCHAR(2) NOT NULL,
+    state VARCHAR(10) NOT NULL,
     title TEXT NOT NULL,
     version_year INTEGER NOT NULL,
     source_url TEXT,
     age_band VARCHAR(10) NOT NULL,
     publishing_agency TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(state, version_year, title)
+    UNIQUE(country, state, version_year, title)
 );
 
 CREATE TABLE domains (
@@ -403,7 +413,7 @@ CREATE TABLE strands (
 
 CREATE TABLE indicators (
     id SERIAL PRIMARY KEY,
-    standard_id VARCHAR(50) UNIQUE NOT NULL,
+    standard_id VARCHAR(100) UNIQUE NOT NULL,
     domain_id INTEGER REFERENCES domains(id) NOT NULL,
     subdomain_id INTEGER REFERENCES subdomains(id),
     strand_id INTEGER REFERENCES strands(id),
@@ -417,8 +427,9 @@ CREATE TABLE indicators (
 
 CREATE TABLE embeddings (
     id SERIAL PRIMARY KEY,
-    indicator_id VARCHAR(50) REFERENCES indicators(standard_id),
-    state VARCHAR(2) NOT NULL,
+    indicator_id VARCHAR(100) REFERENCES indicators(standard_id),
+    country VARCHAR(2) NOT NULL,
+    state VARCHAR(10) NOT NULL,
     vector vector(1536),
     embedding_model VARCHAR(100) NOT NULL,
     embedding_version VARCHAR(10) NOT NULL,
@@ -429,8 +440,9 @@ CREATE TABLE embeddings (
 CREATE TABLE recommendations (
     id SERIAL PRIMARY KEY,
     recommendation_id VARCHAR(100) UNIQUE NOT NULL,
-    indicator_id VARCHAR(50) REFERENCES indicators(standard_id),
-    state VARCHAR(2) NOT NULL,
+    indicator_id VARCHAR(100) REFERENCES indicators(standard_id),
+    country VARCHAR(2) NOT NULL,
+    state VARCHAR(10) NOT NULL,
     audience VARCHAR(10) NOT NULL CHECK (audience IN ('parent', 'teacher')),
     activity_description TEXT NOT NULL,
     age_band VARCHAR(10) NOT NULL,
@@ -442,7 +454,8 @@ CREATE TABLE pipeline_runs (
     id SERIAL PRIMARY KEY,
     run_id VARCHAR(100) UNIQUE NOT NULL,
     document_s3_key TEXT NOT NULL,
-    state VARCHAR(2) NOT NULL,
+    country VARCHAR(2) NOT NULL,
+    state VARCHAR(10) NOT NULL,
     version_year INTEGER NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'running',
     total_indicators INTEGER DEFAULT 0,
@@ -465,11 +478,12 @@ CREATE TABLE pipeline_stages (
 );
 
 -- Indexes for common query patterns
-CREATE INDEX idx_indicators_state ON indicators(standard_id);
-CREATE INDEX idx_embeddings_state ON embeddings(state);
+CREATE INDEX idx_indicators_standard_id ON indicators(standard_id);
+CREATE INDEX idx_embeddings_country_state ON embeddings(country, state);
 CREATE INDEX idx_embeddings_vector ON embeddings USING ivfflat (vector vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_recommendations_state_indicator ON recommendations(state, indicator_id);
+CREATE INDEX idx_recommendations_country_state_indicator ON recommendations(country, state, indicator_id);
 CREATE INDEX idx_recommendations_audience ON recommendations(audience);
+CREATE INDEX idx_documents_country_state ON documents(country, state);
 ```
 
 ### Mermaid ER Diagram
@@ -554,13 +568,13 @@ _A property is a characteristic or behavior that should hold true across all val
 
 ### Property 1: S3 Path Construction
 
-_For any_ valid state code, version year, and filename/standard_id, the constructed S3 key SHALL match the pattern `{state}/{year}/{identifier}` — no leading slashes, no double slashes, and all components present.
+_For any_ valid country code, state code, version year, and filename/standard_id, the constructed S3 key SHALL match the pattern `{country}/{state}/{year}/{identifier}` — no leading slashes, no double slashes, and all components present.
 
 **Validates: Requirements 1.1, 5.5**
 
 ### Property 2: Ingestion Metadata Completeness
 
-_For any_ successful ingestion result, the metadata dictionary SHALL contain non-empty values for all required keys: state, version_year, source_url, publishing_agency, and upload_timestamp.
+_For any_ successful ingestion result, the metadata dictionary SHALL contain non-empty values for all required keys: country, state, version_year, source_url, publishing_agency, and upload_timestamp.
 
 **Validates: Requirements 1.2**
 
@@ -618,7 +632,7 @@ _For any_ set of detected elements with N distinct hierarchy levels:
 
 ### Property 11: Standard_ID Determinism
 
-_For any_ given (state, version_year, domain_code, indicator_code) tuple, calling the Standard_ID generator twice SHALL produce identical results.
+_For any_ given (country, state, version_year, domain_code, indicator_code) tuple, calling the Standard_ID generator twice SHALL produce identical results.
 
 **Validates: Requirements 4.5**
 
@@ -630,7 +644,7 @@ _For any_ valid parse result, every standard in the `standards` list SHALL have 
 
 ### Property 13: Schema Validation Rejects Invalid Records
 
-_For any_ Canonical_JSON record missing any required field (state, document.title, document.version_year, document.source_url, document.age_band, document.publishing_agency, standard.standard_id, standard.domain.code, standard.domain.name, standard.indicator.code, standard.indicator.description, or metadata), the Validator SHALL return `is_valid = False`.
+_For any_ Canonical_JSON record missing any required field (country, state, document.title, document.version_year, document.source_url, document.age_band, document.publishing_agency, standard.standard_id, standard.domain.code, standard.domain.name, standard.indicator.code, standard.indicator.description, or metadata), the Validator SHALL return `is_valid = False`.
 
 **Validates: Requirements 5.1, 5.2, 5.3**
 
@@ -642,7 +656,7 @@ _For any_ invalid Canonical_JSON record, the Validator SHALL return at least one
 
 ### Property 15: Standard_ID Uniqueness Enforcement
 
-_For any_ set of Canonical_JSON records containing two records with the same standard_id, state, and version_year, the Validator SHALL detect and report the uniqueness violation.
+_For any_ set of Canonical_JSON records containing two records with the same standard_id, country, state, and version_year, the Validator SHALL detect and report the uniqueness violation.
 
 **Validates: Requirements 5.7**
 
@@ -660,7 +674,7 @@ _For any_ NormalizedStandard, the embedding input text SHALL contain the domain 
 
 ### Property 18: Embedding Record Completeness
 
-_For any_ embedding record, the fields indicator_id, state, vector (non-empty list), embedding_model, embedding_version, and created_at SHALL all be present and non-empty.
+_For any_ embedding record, the fields indicator_id, country, state, vector (non-empty list), embedding_model, embedding_version, and created_at SHALL all be present and non-empty.
 
 **Validates: Requirements 6.3**
 
@@ -672,7 +686,7 @@ _For any_ query vector and set of stored embedding vectors, the results returned
 
 ### Property 20: Query Filter Correctness
 
-_For any_ similarity query with a state filter, all returned indicators SHALL have a `state` value matching the filter. The same holds for age_band, domain, and version_year filters.
+_For any_ similarity query with a country filter, all returned indicators SHALL have a `country` value matching the filter. The same holds for state, age_band, domain, and version_year filters.
 
 **Validates: Requirements 7.4**
 
@@ -690,7 +704,7 @@ _For any_ recommendation generation call, the prompt sent to the LLM SHALL inclu
 
 ### Property 23: Recommendation Record Completeness
 
-_For any_ recommendation record, the fields recommendation_id, indicator_id, state, audience (one of "parent" or "teacher"), activity_description (non-empty), age_band, generation_model, and created_at SHALL all be present and valid.
+_For any_ recommendation record, the fields recommendation_id, indicator_id, country, state, audience (one of "parent" or "teacher"), activity_description (non-empty), age_band, generation_model, and created_at SHALL all be present and valid.
 
 **Validates: Requirements 8.3, 8.6**
 
@@ -702,7 +716,7 @@ _For any_ recommendation text, the actionability checker SHALL return True only 
 
 ### Property 25: Recommendation State Scoping
 
-_For any_ recommendation request specifying a state, all returned recommendations SHALL reference indicators belonging to that state only. No indicator_id from a different state SHALL appear in the results.
+_For any_ recommendation request specifying a country and state, all returned recommendations SHALL reference indicators belonging to that country and state only. No indicator_id from a different country or state SHALL appear in the results.
 
 **Validates: Requirements 8.7**
 
