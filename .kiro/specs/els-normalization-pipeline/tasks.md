@@ -123,8 +123,8 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Test with sample detected elements from various states
     - Verify Standard_ID format and uniqueness
 
-- [ ] 7. Implement Validator
-  - [ ] 7.1 Implement `validator.py` with `validate_record()`, `serialize_record()`, and `deserialize_record()` functions
+- [x] 7. Implement Validator
+  - [x] 7.1 Implement `validator.py` with `validate_record()`, `serialize_record()`, and `deserialize_record()` functions
     - JSON Schema validation for required fields at all levels (state, document._, standard._, metadata)
     - Allow null subdomain/strand when hierarchy depth < 4
     - Collect all validation errors (don't fail on first)
@@ -132,9 +132,9 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Serialize NormalizedStandard to Canonical_JSON dict, deserialize back with round-trip fidelity
     - Store valid records to S3 under `{state}/{year}/{standard_id}.json`
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8_
-  - [ ] 7.2 Add CloudFormation resources for Validator Lambda and S3 processed bucket (`els-processed-json`) with versioning
+  - [x] 7.2 Add CloudFormation resources for Validator Lambda and S3 processed bucket (`els-processed-json`) with versioning
     - _Requirements: 5.5_
-  - [ ] 7.3 Write property tests for validation
+  - [x] 7.3 Write property tests for validation
     - **Property 13: Schema Validation Rejects Invalid Records** — Missing any required field → is_valid=False
     - **Validates: Requirements 5.1, 5.2, 5.3**
     - **Property 14: Validation Error Reporting** — Invalid records produce errors with non-empty field_path and message
@@ -143,12 +143,12 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 5.7**
     - **Property 16: Serialization Round Trip** — serialize then deserialize produces equivalent object
     - **Validates: Requirements 5.8**
-  - [ ] 7.4 Write integration tests for validator with mocked S3
+  - [x] 7.4 Write integration tests for validator with mocked S3
     - Test schema validation with valid and invalid records
     - Test serialization/deserialization round-trip
     - Test Standard_ID uniqueness checking
     - Test S3 storage of validated records
-  - [ ] 7.5 Create manual AWS test script for validator
+  - [x] 7.5 Create manual AWS test script for validator
     - Script: `scripts/test_validator_manual.py`
     - Test with real S3 storage
     - Verify JSON files in processed bucket
@@ -157,59 +157,119 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
 - [ ] 8. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. Implement Embedding Generator
-  - [ ] 9.1 Implement `embedder.py` with `build_embedding_input()` and `generate_embeddings()` functions
-    - Construct input text: concatenate domain name, subdomain name (if present), strand name (if present), indicator description, age band — omit null levels
-    - Call Amazon Titan Embed Text v2 via Bedrock
-    - Build EmbeddingRecord with indicator_id, state, vector, model ID, version, timestamp
-    - Store to S3 embeddings bucket and persist to Aurora PostgreSQL
-    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
-  - [ ] 9.2 Add CloudFormation resources for Embedding Generator Lambda with Bedrock invoke permissions and S3 embeddings bucket (`els-embeddings`) with versioning
-    - _Requirements: 6.2, 6.4_
-  - [ ] 9.3 Write property tests for embedding generation
-    - **Property 17: Embedding Input Text Construction** — Input text contains domain, indicator desc, age band; includes subdomain/strand only when non-null
-    - **Validates: Requirements 6.1**
-  - [ ] 9.4 Write integration tests for embedding generator with mocked Bedrock and S3
-    - Test embedding input text construction with various hierarchy depths
-    - Test Bedrock API calls with mocked responses
-    - Test S3 storage of embedding records
-    - Test error handling for API failures
-  - [ ] 9.5 Create manual AWS test script for embedding generator
-    - Script: `scripts/test_embedder_manual.py`
-    - Test with real Bedrock Titan Embed model
-    - Verify embeddings stored in S3 and database
-    - Include environment variable setup instructions
-
-- [ ] 10. Implement Data Access Layer and Query Support
-  - [ ] 10.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_state()`
+- [ ] 9. Implement Data Access Layer and Query Support
+  - [ ] 9.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_state()`
     - Use psycopg2 for Aurora PostgreSQL connections
     - Implement cosine similarity search using pgvector operators
     - Support filtering by state, age_band, domain, version_year
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
-  - [ ] 10.2 Create database migration scripts (SQL files) for all tables, indexes, and the pgvector extension
+  - [ ] 9.2 Create database migration scripts (SQL files) for all tables, indexes, and the pgvector extension
     - Include the full schema from the design document
     - Version migration files sequentially (001_initial_schema.sql, etc.)
     - _Requirements: 7.5_
-  - [ ] 10.3 Add CloudFormation resources for Aurora PostgreSQL Serverless cluster with pgvector extension, VPC, security groups, and Secrets Manager for credentials
+  - [ ] 9.3 Add CloudFormation resources for Aurora PostgreSQL Serverless cluster with pgvector extension, VPC, security groups, and Secrets Manager for credentials
     - _Requirements: 7.1, 7.5_
-  - [ ] 10.4 Write property tests for query layer
+  - [ ] 9.4 Write property tests for query layer
     - **Property 19: Vector Similarity Ordering** — Results ordered by decreasing cosine similarity
     - **Validates: Requirements 7.3**
     - **Property 20: Query Filter Correctness** — Filtered results match the specified filter values
     - **Validates: Requirements 7.4**
-  - [ ] 10.5 Write integration tests for data access layer with test database
+  - [ ] 9.5 Write integration tests for data access layer with test database
     - Test database connection and connection pooling
     - Test CRUD operations for standards, embeddings, recommendations
     - Test vector similarity search with sample embeddings
     - Test query filters and pagination
-  - [ ] 10.6 Create manual AWS test script for database operations
+  - [ ] 9.6 Create manual AWS test script for database operations
     - Script: `scripts/test_db_manual.py`
     - Test with real Aurora PostgreSQL cluster
     - Verify pgvector extension and similarity search
     - Include database connection setup instructions
 
-- [ ] 11. Implement Recommendation Generator
-  - [ ] 11.1 Implement `recommender.py` with `generate_recommendations()` function
+- [ ] 10. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 11. Implement Pipeline Orchestrator (without embeddings and recommendations)
+  - [ ] 11.1 Implement `orchestrator.py` with `start_pipeline()`, `rerun_stage()`, and `get_pipeline_status()` functions
+    - Chain stages in order: ingestion → extraction → detection → parsing → validation → persistence
+    - Record PipelineStageResult for each stage (name, status, duration_ms, output_artifact)
+    - On failure: halt, record error, preserve partial results
+    - Track totals: indicators extracted, validated
+    - Support re-running individual stages by reading previous stage output from S3
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+  - [ ] 11.2 Create AWS Step Functions state machine definition in CloudFormation wiring Lambda handlers for core pipeline stages
+    - Define states for each pipeline stage with error catching and retry configuration
+    - Configure SNS topic and subscription for pipeline completion and failure notifications
+    - Add Step Functions state machine, SNS topic, and execution IAM role to CloudFormation template
+    - _Requirements: 9.1, 9.3_
+  - [ ] 11.3 Write property tests for pipeline orchestrator
+    - **Property 26: Pipeline Stage Result Completeness** — Every stage result has stage_name, status, duration_ms, output_artifact
+    - **Validates: Requirements 9.2**
+    - **Property 27: Pipeline Run Counts Invariant** — total_validated <= total_indicators
+    - **Validates: Requirements 9.4**
+  - [ ] 11.4 Write integration tests for pipeline orchestrator
+    - Test full pipeline execution with mocked stage functions
+    - Test error handling and partial result preservation
+    - Test stage re-run functionality
+    - Test pipeline status tracking
+  - [ ] 11.5 Create manual AWS test script for core pipeline
+    - Script: `scripts/test_pipeline_manual.py`
+    - Test complete pipeline execution with Step Functions (without embeddings/recommendations)
+    - Monitor execution status and stage transitions
+    - Verify SNS notifications
+    - Include environment variable setup instructions
+
+- [ ] 12. Integration wiring and Lambda handlers (core pipeline)
+  - [ ] 12.1 Create Lambda handler entry points for core pipeline stages
+    - Each handler: parse event, call module function, return result for Step Functions
+    - Shared error handling wrapper for consistent error reporting
+    - Handlers for: ingestion, extraction, detection, parsing, validation
+    - _Requirements: 9.1_
+  - [ ] 12.2 Consolidate and validate the CloudFormation template for core pipeline
+    - Ensure all resources from previous tasks are correctly wired (S3 buckets, Lambdas, Step Functions, Aurora, SNS, IAM roles, VPC)
+    - Add CloudFormation outputs for key resource ARNs and endpoints
+    - Validate template with `aws cloudformation validate-template`
+    - Add a deploy script (`scripts/deploy.sh`) that packages Lambda code and deploys the stack
+    - _Requirements: 1.1, 1.3, 7.1, 9.1_
+  - [ ] 12.3 Write end-to-end integration tests for core pipeline
+    - Test complete pipeline with core stages using mocked AWS services
+    - Test error propagation and recovery
+    - Test data flow between stages
+    - Verify final outputs in all storage locations
+  - [ ] 12.4 Create comprehensive AWS deployment and testing guide for core pipeline
+    - Document: `documentation/AWS_TESTING.md`
+    - Include pre-deployment checklist
+    - Step-by-step deployment instructions
+    - Post-deployment verification steps
+    - Troubleshooting guide for common issues
+
+- [ ] 13. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 14. Implement Embedding Generator
+  - [ ] 14.1 Implement `embedder.py` with `build_embedding_input()` and `generate_embeddings()` functions
+    - Construct input text: concatenate domain name, subdomain name (if present), strand name (if present), indicator description, age band — omit null levels
+    - Call Amazon Titan Embed Text v2 via Bedrock
+    - Build EmbeddingRecord with indicator_id, state, vector, model ID, version, timestamp
+    - Store to S3 embeddings bucket and persist to Aurora PostgreSQL
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+  - [ ] 14.2 Add CloudFormation resources for Embedding Generator Lambda with Bedrock invoke permissions and S3 embeddings bucket (`els-embeddings`) with versioning
+    - _Requirements: 6.2, 6.4_
+  - [ ] 14.3 Write property tests for embedding generation
+    - **Property 17: Embedding Input Text Construction** — Input text contains domain, indicator desc, age band; includes subdomain/strand only when non-null
+    - **Validates: Requirements 6.1**
+  - [ ] 14.4 Write integration tests for embedding generator with mocked Bedrock and S3
+    - Test embedding input text construction with various hierarchy depths
+    - Test Bedrock API calls with mocked responses
+    - Test S3 storage of embedding records
+    - Test error handling for API failures
+  - [ ] 14.5 Create manual AWS test script for embedding generator
+    - Script: `scripts/test_embedder_manual.py`
+    - Test with real Bedrock Titan Embed model
+    - Verify embeddings stored in S3 and database
+    - Include environment variable setup instructions
+
+- [ ] 15. Implement Recommendation Generator
+  - [ ] 15.1 Implement `recommender.py` with `generate_recommendations()` function
     - Build LLM prompt including indicator description, parent hierarchy, age band
     - Scope all indicator queries to the requested state only
     - Parse LLM response into Recommendation objects
@@ -218,9 +278,9 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Support domain/subdomain-level aggregation: fetch grouped indicators, produce holistic recommendations
     - Ensure at least one parent-facing and one teacher-facing recommendation per indicator request
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
-  - [ ] 11.2 Add CloudFormation resources for Recommendation Generator Lambda with Bedrock invoke permissions and Aurora access
+  - [ ] 15.2 Add CloudFormation resources for Recommendation Generator Lambda with Bedrock invoke permissions and Aurora access
     - _Requirements: 8.2, 8.6_
-  - [ ] 11.3 Write property tests for recommendation generation
+  - [ ] 15.3 Write property tests for recommendation generation
     - **Property 21: Recommendation Audience Coverage** — At least one parent and one teacher recommendation per request
     - **Validates: Requirements 8.1**
     - **Property 22: Recommendation Prompt Context** — Prompt includes indicator desc, hierarchy names, age band
@@ -229,76 +289,52 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - **Validates: Requirements 8.5**
     - **Property 25: Recommendation State Scoping** — All recommendations reference indicators from requested state only
     - **Validates: Requirements 8.7**
-  - [ ] 11.4 Write integration tests for recommendation generator with mocked Bedrock
+  - [ ] 15.4 Write integration tests for recommendation generator with mocked Bedrock
     - Test recommendation generation with mocked LLM responses
     - Test audience coverage (parent and teacher)
     - Test actionability checker with various inputs
     - Test retry logic for non-actionable responses
     - Test domain/subdomain aggregation
-  - [ ] 11.5 Create manual AWS test script for recommendation generator
+  - [ ] 15.5 Create manual AWS test script for recommendation generator
     - Script: `scripts/test_recommender_manual.py`
     - Test with real Bedrock Claude model
     - Verify recommendations stored in database
     - Test with various states and age bands
     - Include environment variable setup instructions
 
-- [ ] 12. Checkpoint - Ensure all tests pass
+- [ ] 16. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Implement Pipeline Orchestrator
-  - [ ] 13.1 Implement `orchestrator.py` with `start_pipeline()`, `rerun_stage()`, and `get_pipeline_status()` functions
-    - Chain stages in order: ingestion → extraction → detection → parsing → validation → embedding → recommendation → persistence
-    - Record PipelineStageResult for each stage (name, status, duration_ms, output_artifact)
-    - On failure: halt, record error, preserve partial results
-    - Track totals: indicators extracted, validated, embedded, recommendations generated
-    - Support re-running individual stages by reading previous stage output from S3
-    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
-  - [ ] 13.2 Create AWS Step Functions state machine definition in CloudFormation wiring all Lambda handlers
-    - Define states for each pipeline stage with error catching and retry configuration
-    - Configure SNS topic and subscription for pipeline completion and failure notifications
-    - Add Step Functions state machine, SNS topic, and execution IAM role to CloudFormation template
+- [ ] 17. Integrate Embedding and Recommendation stages into full pipeline
+  - [ ] 17.1 Update `orchestrator.py` to include embedding and recommendation stages
+    - Extend pipeline chain: ingestion → extraction → detection → parsing → validation → embedding → recommendation → persistence
+    - Update tracking totals to include: indicators embedded, recommendations generated
+    - Update property tests to include: total_embedded <= total_validated
+    - _Requirements: 9.1, 9.2, 9.4_
+  - [ ] 17.2 Update Step Functions state machine to include embedding and recommendation stages
+    - Add embedding and recommendation Lambda states to the state machine
+    - Update error handling and retry configuration for new stages
     - _Requirements: 9.1, 9.3_
-  - [ ] 13.3 Write property tests for pipeline orchestrator
-    - **Property 26: Pipeline Stage Result Completeness** — Every stage result has stage_name, status, duration_ms, output_artifact
-    - **Validates: Requirements 9.2**
-    - **Property 27: Pipeline Run Counts Invariant** — total_validated <= total_indicators and total_embedded <= total_validated
-    - **Validates: Requirements 9.4**
-  - [ ] 13.4 Write integration tests for pipeline orchestrator
-    - Test full pipeline execution with mocked stage functions
-    - Test error handling and partial result preservation
-    - Test stage re-run functionality
-    - Test pipeline status tracking
-  - [ ] 13.5 Create manual AWS test script for full pipeline
-    - Script: `scripts/test_pipeline_manual.py`
-    - Test complete pipeline execution with Step Functions
-    - Monitor execution status and stage transitions
-    - Verify SNS notifications
-    - Include environment variable setup instructions
-
-- [ ] 14. Integration wiring and Lambda handlers
-  - [ ] 14.1 Create Lambda handler entry points for each pipeline stage
-    - Each handler: parse event, call module function, return result for Step Functions
-    - Shared error handling wrapper for consistent error reporting
+  - [ ] 17.3 Create Lambda handler entry points for embedding and recommendation stages
+    - Handlers for: embedding generation, recommendation generation
+    - Use shared error handling wrapper
     - _Requirements: 9.1_
-  - [ ] 14.2 Consolidate and validate the full CloudFormation template
-    - Ensure all resources from previous tasks are correctly wired (S3 buckets, Lambdas, Step Functions, Aurora, SNS, IAM roles, VPC)
-    - Add CloudFormation outputs for key resource ARNs and endpoints
-    - Validate template with `aws cloudformation validate-template`
-    - Add a deploy script (`scripts/deploy.sh`) that packages Lambda code and deploys the stack
-    - _Requirements: 1.1, 1.3, 7.1, 9.1_
-  - [ ] 14.3 Write end-to-end integration tests
-    - Test complete pipeline with all stages using mocked AWS services
-    - Test error propagation and recovery
-    - Test data flow between stages
+  - [ ] 17.4 Update CloudFormation template with embedding and recommendation resources
+    - Ensure all new resources are correctly wired
+    - Update outputs to include new resource ARNs
+    - Validate updated template
+    - _Requirements: 1.1, 1.3, 9.1_
+  - [ ] 17.5 Write end-to-end integration tests for complete pipeline
+    - Test full pipeline with all stages including embeddings and recommendations
+    - Test error propagation and recovery across all stages
+    - Test data flow through entire pipeline
     - Verify final outputs in all storage locations
-  - [ ] 14.4 Create comprehensive AWS deployment and testing guide
-    - Document: `documentation/AWS_TESTING.md`
-    - Include pre-deployment checklist
-    - Step-by-step deployment instructions
-    - Post-deployment verification steps
-    - Troubleshooting guide for common issues
+  - [ ] 17.6 Update AWS deployment and testing guide
+    - Update `documentation/AWS_TESTING.md` with embedding and recommendation testing steps
+    - Add verification steps for embeddings and recommendations
+    - Update troubleshooting guide
 
-- [ ] 15. Final checkpoint - Ensure all tests pass
+- [ ] 18. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes
