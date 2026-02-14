@@ -71,25 +71,25 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
 - [x] 4. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Implement Structure Detector
-  - [ ] 5.1 Implement `detector.py` with `detect_structure()` function
+- [x] 5. Implement Structure Detector
+  - [x] 5.1 Implement `detector.py` with `detect_structure()` function
     - Chunk text blocks into ~2000 token groups with overlap
     - Build structured prompt for Bedrock LLM requesting JSON array of classified elements
     - Parse LLM response into `DetectedElement` objects
     - Set `needs_review = True` for elements with confidence < 0.7
     - Handle malformed LLM JSON responses with retry (up to 2 retries)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
-  - [ ] 5.2 Add CloudFormation resources for Structure Detector Lambda with Bedrock invoke permissions
+  - [x] 5.2 Add CloudFormation resources for Structure Detector Lambda with Bedrock invoke permissions
     - _Requirements: 3.1_
-  - [ ] 5.3 Write property tests for structure detection
+  - [x] 5.3 Write property tests for structure detection
     - **Property 8: Confidence Threshold Flagging** — For any element, confidence < 0.7 implies needs_review=True, >= 0.7 implies False
     - **Validates: Requirements 3.4**
-  - [ ] 5.4 Write integration tests for structure detector with mocked Bedrock
+  - [x] 5.4 Write integration tests for structure detector with mocked Bedrock
     - Test successful structure detection with mocked LLM responses
     - Test confidence threshold flagging
     - Test JSON parsing and retry logic
     - Test chunking and overlap handling
-  - [ ] 5.5 Create manual AWS test script for structure detector
+  - [x] 5.5 Create manual AWS test script for structure detector
     - Script: `scripts/test_detector_manual.py`
     - Test with real Bedrock on extracted text
     - Include environment variable setup instructions

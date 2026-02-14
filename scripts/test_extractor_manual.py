@@ -169,7 +169,7 @@ def test_extraction():
                     'block_type': b.block_type,
                     'confidence': b.confidence
                 }
-                for b in result.blocks[:10]
+                for b in result.blocks[:500]
             ]
         }
         
