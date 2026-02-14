@@ -7,9 +7,6 @@ Description: |
   - Processed JSON: {country}/{state}/{year}/{standard_id}.json
   - Embeddings: {country}/{state}/{year}/embeddings/{standard_id}.json
 
-  All resources support multi-country deployments with country codes
-  following ISO 3166-1 alpha-2 format (e.g., US, CA, AU).
-
 Parameters:
   EnvironmentName:
     Type: String
