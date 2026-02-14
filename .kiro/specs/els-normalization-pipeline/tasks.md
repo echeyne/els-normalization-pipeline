@@ -217,29 +217,29 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
 - [x] 9. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Implement Data Access Layer and Query Support
-  - [ ] 10.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_country_state()`
+- [x] 10. Implement Data Access Layer and Query Support
+  - [x] 10.1 Implement `db.py` with database connection management, `persist_standard()`, `persist_embedding()`, `persist_recommendation()`, `query_similar_indicators()`, and `get_indicators_by_country_state()`
     - Use psycopg2 for Aurora PostgreSQL connections
     - Implement cosine similarity search using pgvector operators
     - Support filtering by country, state, age_band, domain, version_year
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
-  - [ ] 10.2 Create database migration scripts (SQL files) for all tables, indexes, and the pgvector extension
+  - [x] 10.2 Create database migration scripts (SQL files) for all tables, indexes, and the pgvector extension
     - Include the full schema from the design document with country columns
     - Version migration files sequentially (001_initial_schema.sql, etc.)
     - _Requirements: 7.5_
-  - [ ] 10.3 Add CloudFormation resources for Aurora PostgreSQL Serverless cluster with pgvector extension, VPC, security groups, and Secrets Manager for credentials
+  - [x] 10.3 Add CloudFormation resources for Aurora PostgreSQL Serverless cluster with pgvector extension, VPC, security groups, and Secrets Manager for credentials
     - _Requirements: 7.1, 7.5_
-  - [ ] 10.4 Write property tests for query layer
+  - [x] 10.4 Write property tests for query layer
     - **Property 19: Vector Similarity Ordering** — Results ordered by decreasing cosine similarity
     - **Validates: Requirements 7.3**
     - **Property 20: Query Filter Correctness** — Filtered results match the specified filter values (including country)
     - **Validates: Requirements 7.4**
-  - [ ] 10.5 Write integration tests for data access layer with test database
+  - [x] 10.5 Write integration tests for data access layer with test database
     - Test database connection and connection pooling
     - Test CRUD operations for standards, embeddings, recommendations
     - Test vector similarity search with sample embeddings
     - Test query filters (including country) and pagination
-  - [ ] 10.6 Create manual AWS test script for database operations
+  - [x] 10.6 Create manual AWS test script for database operations
     - Script: `scripts/test_db_manual.py`
     - Test with real Aurora PostgreSQL cluster
     - Verify pgvector extension and similarity search

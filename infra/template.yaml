@@ -244,15 +244,197 @@ Resources:
         - Key: Project
           Value: ELS-Pipeline
 
+  # VPC for Aurora PostgreSQL
+  DatabaseVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "els-database-vpc-${EnvironmentName}"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Private Subnets for Aurora
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DatabaseVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "els-database-subnet-1-${EnvironmentName}"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DatabaseVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "els-database-subnet-2-${EnvironmentName}"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # DB Subnet Group
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub "els-database-subnet-group-${EnvironmentName}"
+      DBSubnetGroupDescription: Subnet group for ELS Aurora PostgreSQL cluster
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Security Group for Aurora
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "els-database-sg-${EnvironmentName}"
+      GroupDescription: Security group for ELS Aurora PostgreSQL cluster
+      VpcId: !Ref DatabaseVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "els-database-sg-${EnvironmentName}"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Security Group for Lambda functions
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "els-lambda-sg-${EnvironmentName}"
+      GroupDescription: Security group for Lambda functions accessing Aurora
+      VpcId: !Ref DatabaseVPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS for AWS API calls
+      Tags:
+        - Key: Name
+          Value: !Sub "els-lambda-sg-${EnvironmentName}"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Security Group Ingress Rule - Lambda to Database
+  DatabaseSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: Allow PostgreSQL access from Lambda functions
+
+  # Security Group Egress Rule - Lambda to Database
+  LambdaSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+      Description: Allow PostgreSQL access to Aurora
+
+  # Secrets Manager for database credentials
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "els-database-credentials-${EnvironmentName}"
+      Description: Database credentials for ELS Aurora PostgreSQL cluster
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "els_admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Aurora PostgreSQL Serverless v2 Cluster
+  DatabaseCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: !Sub "els-database-cluster-${EnvironmentName}"
+      Engine: aurora-postgresql
+      EngineVersion: "15.15"
+      DatabaseName: els_pipeline
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 2
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      EnableCloudwatchLogsExports:
+        - postgresql
+      EnableHttpEndpoint: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Aurora PostgreSQL Instance
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "els-database-instance-${EnvironmentName}"
+      DBClusterIdentifier: !Ref DatabaseCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+      PubliclyAccessible: false
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Secret attachment for RDS
+  DatabaseSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DatabaseSecret
+      TargetId: !Ref DatabaseCluster
+      TargetType: AWS::RDS::DBCluster
+
   # Lambda functions will be added in subsequent tasks
   # Step Functions state machine will be added in subsequent tasks
-  # Aurora PostgreSQL cluster will be added in subsequent tasks
 
   # Lambda Environment Variables Configuration
   # All Lambda functions should include these environment variables:
   # - ELS_RAW_BUCKET: !Ref RawDocumentsBucket
   # - ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
   # - ELS_EMBEDDINGS_BUCKET: !Ref EmbeddingsBucket (when created)
+  # - DB_SECRET_ARN: !Ref DatabaseSecret
+  # - DB_CLUSTER_ARN: !GetAtt DatabaseCluster.DBClusterArn
   # - ENVIRONMENT: !Ref EnvironmentName
   # - AWS_REGION: !Ref AWS::Region
   # - COUNTRY_CODE_VALIDATION: "enabled" (validates ISO 3166-1 alpha-2)
@@ -333,3 +515,45 @@ Outputs:
     Value: !GetAtt ValidatorLambdaRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ValidatorLambdaRoleArn"
+
+  DatabaseClusterEndpoint:
+    Description: Aurora PostgreSQL cluster endpoint
+    Value: !GetAtt DatabaseCluster.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseClusterEndpoint"
+
+  DatabaseClusterArn:
+    Description: ARN of the Aurora PostgreSQL cluster
+    Value: !GetAtt DatabaseCluster.DBClusterArn
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseClusterArn"
+
+  DatabaseSecretArn:
+    Description: ARN of the database credentials secret
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseSecretArn"
+
+  DatabaseVPCId:
+    Description: VPC ID for the database
+    Value: !Ref DatabaseVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseVPCId"
+
+  LambdaSecurityGroupId:
+    Description: Security group ID for Lambda functions
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaSecurityGroupId"
+
+  DatabaseSubnet1Id:
+    Description: Database subnet 1 ID
+    Value: !Ref DatabaseSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseSubnet1Id"
+
+  DatabaseSubnet2Id:
+    Description: Database subnet 2 ID
+    Value: !Ref DatabaseSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseSubnet2Id"
