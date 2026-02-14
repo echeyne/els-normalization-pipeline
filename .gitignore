@@ -49,3 +49,4 @@ Thumbs.db
 # Project Specific
 extractor_test_output.json
 detector_test_output.json
+scratches.txt
