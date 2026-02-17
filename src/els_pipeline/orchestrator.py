@@ -65,13 +65,19 @@ def start_pipeline(
     # Generate unique run ID
     run_id = f"pipeline-{country}-{state}-{version_year}-{uuid.uuid4().hex[:8]}"
     
+    # Extract filename from S3 key
+    filename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
+    
     # Prepare execution input
     execution_input = {
         "run_id": run_id,
-        "document_s3_key": s3_key,
+        "file_path": s3_key,
         "country": country,
         "state": state,
         "version_year": version_year,
+        "source_url": "",  # Optional: can be provided by caller in future
+        "publishing_agency": "",  # Optional: can be provided by caller in future
+        "filename": filename,
         "started_at": datetime.now(timezone.utc).isoformat()
     }
     

@@ -57,7 +57,7 @@ def ingest_document(request: IngestionRequest) -> IngestionResult:
     Ingest a raw document into S3 with metadata.
     
     Validates file format and country code, constructs S3 path, uploads to S3 with versioning,
-    and records metadata tags.
+    and records metadata tags. If file_path is an S3 key (already in S3), validates and tags it.
     
     Args:
         request: IngestionRequest containing file path and metadata
@@ -90,10 +90,57 @@ def ingest_document(request: IngestionRequest) -> IngestionResult:
         "upload_timestamp": upload_timestamp
     }
     
-    # Upload to S3
+    s3_client = boto3.client("s3", region_name=Config.AWS_REGION)
+    
+    # Check if file_path is already an S3 key (file already in S3)
+    # This happens when the file was pre-uploaded for testing
+    if request.file_path == s3_key or request.file_path.startswith(f"{request.country}/{request.state}/"):
+        try:
+            # File is already in S3, just validate it exists and update metadata
+            response = s3_client.head_object(
+                Bucket=Config.S3_RAW_BUCKET,
+                Key=s3_key
+            )
+            
+            # Update metadata tags
+            s3_client.copy_object(
+                Bucket=Config.S3_RAW_BUCKET,
+                Key=s3_key,
+                CopySource={'Bucket': Config.S3_RAW_BUCKET, 'Key': s3_key},
+                Metadata=metadata,
+                MetadataDirective='REPLACE'
+            )
+            
+            version_id = response.get("VersionId", "")
+            
+            return IngestionResult(
+                s3_key=s3_key,
+                s3_version_id=version_id,
+                metadata=metadata,
+                status="success",
+                error=None
+            )
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            if error_code == "404" or error_code == "NoSuchKey":
+                return IngestionResult(
+                    s3_key=s3_key,
+                    s3_version_id="",
+                    metadata=metadata,
+                    status="error",
+                    error=f"File not found in S3: {s3_key}"
+                )
+            error_msg = e.response.get("Error", {}).get("Message", str(e))
+            return IngestionResult(
+                s3_key=s3_key,
+                s3_version_id="",
+                metadata=metadata,
+                status="error",
+                error=f"S3 error ({error_code}): {error_msg}"
+            )
+    
+    # Upload local file to S3
     try:
-        s3_client = boto3.client("s3", region_name=Config.AWS_REGION)
-        
         # Read file content
         with open(request.file_path, "rb") as f:
             file_content = f.read()

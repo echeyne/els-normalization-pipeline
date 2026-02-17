@@ -68,6 +68,18 @@ check_prerequisites() {
     print_message "$GREEN" "✓ CloudFormation template found"
 }
 
+# Package Lambda functions
+package_lambdas() {
+    print_header "Packaging Lambda Functions"
+    
+    if [ -f "scripts/package_lambda.sh" ]; then
+        ENVIRONMENT=$ENVIRONMENT AWS_REGION=$REGION bash scripts/package_lambda.sh
+    else
+        print_message "$RED" "❌ Lambda packaging script not found"
+        exit 1
+    fi
+}
+
 # Validate CloudFormation template
 validate_template() {
     print_header "Validating CloudFormation Template"
@@ -293,6 +305,7 @@ main() {
     print_message "$BLUE" "Starting deployment process..."
     
     check_prerequisites
+    package_lambdas
     validate_template
     deploy_stack
     get_stack_outputs

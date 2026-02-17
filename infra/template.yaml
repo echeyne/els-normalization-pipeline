@@ -125,6 +125,8 @@ Resources:
                   - textract:AnalyzeDocument
                   - textract:StartDocumentTextDetection
                   - textract:GetDocumentTextDetection
+                  - textract:StartDocumentAnalysis
+                  - textract:GetDocumentAnalysis
                 Resource: "*"
       Tags:
         - Key: Environment
@@ -238,6 +240,195 @@ Resources:
                 Resource:
                   - !Sub "${ProcessedJsonBucket.Arn}/*"
                   - !GetAtt ProcessedJsonBucket.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # IAM Role for Persistence Lambda (with VPC access)
+  PersistenceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "els-persistence-lambda-role-${EnvironmentName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: RDSDataAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - rds-data:BatchExecuteStatement
+                  - rds-data:BeginTransaction
+                  - rds-data:CommitTransaction
+                  - rds-data:RollbackTransaction
+                Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:*"
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecret
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Lambda Functions
+  # Note: Lambda functions require packaged code (ZIP file) uploaded to S3
+  # Use the deployment script to package and deploy Lambda functions
+
+  # Ingester Lambda Function
+  IngesterLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "els-ingester-${EnvironmentName}"
+      Runtime: python3.11
+      Handler: els_pipeline.handlers.ingestion_handler
+      Role: !GetAtt IngesterLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          ELS_RAW_BUCKET: !Ref RawDocumentsBucket
+          ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
+          ENVIRONMENT: !Ref EnvironmentName
+          COUNTRY_CODE_VALIDATION: "enabled"
+      Code:
+        S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
+        S3Key: "els-lambda-package.zip"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Text Extractor Lambda Function
+  TextExtractorLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "els-text-extractor-${EnvironmentName}"
+      Runtime: python3.11
+      Handler: els_pipeline.handlers.extraction_handler
+      Role: !GetAtt TextExtractorLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          ELS_RAW_BUCKET: !Ref RawDocumentsBucket
+          ENVIRONMENT: !Ref EnvironmentName
+      Code:
+        S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
+        S3Key: "els-lambda-package.zip"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Structure Detector Lambda Function
+  StructureDetectorLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "els-structure-detector-${EnvironmentName}"
+      Runtime: python3.11
+      Handler: els_pipeline.handlers.detection_handler
+      Role: !GetAtt StructureDetectorLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          BEDROCK_LLM_MODEL_ID: "us.anthropic.claude-sonnet-4-5-v2:0"
+          CONFIDENCE_THRESHOLD: "0.7"
+          ENVIRONMENT: !Ref EnvironmentName
+      Code:
+        S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
+        S3Key: "els-lambda-package.zip"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Hierarchy Parser Lambda Function
+  HierarchyParserLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "els-hierarchy-parser-${EnvironmentName}"
+      Runtime: python3.11
+      Handler: els_pipeline.handlers.parsing_handler
+      Role: !GetAtt HierarchyParserLambdaRole.Arn
+      Timeout: 180
+      MemorySize: 512
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentName
+      Code:
+        S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
+        S3Key: "els-lambda-package.zip"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Validator Lambda Function
+  ValidatorLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "els-validator-${EnvironmentName}"
+      Runtime: python3.11
+      Handler: els_pipeline.handlers.validation_handler
+      Role: !GetAtt ValidatorLambdaRole.Arn
+      Timeout: 180
+      MemorySize: 512
+      Environment:
+        Variables:
+          ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
+          ENVIRONMENT: !Ref EnvironmentName
+      Code:
+        S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
+        S3Key: "els-lambda-package.zip"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Data Persistence Lambda Function
+  PersistenceLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "els-persistence-${EnvironmentName}"
+      Runtime: python3.11
+      Handler: els_pipeline.handlers.persistence_handler
+      Role: !GetAtt PersistenceLambdaRole.Arn
+      Timeout: 180
+      MemorySize: 512
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref DatabaseSubnet1
+          - !Ref DatabaseSubnet2
+      Environment:
+        Variables:
+          DB_SECRET_ARN: !Ref DatabaseSecret
+          DB_CLUSTER_ARN: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${DatabaseCluster}"
+          ENVIRONMENT: !Ref EnvironmentName
+      Code:
+        S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
+        S3Key: "els-lambda-package.zip"
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -425,8 +616,493 @@ Resources:
       TargetId: !Ref DatabaseCluster
       TargetType: AWS::RDS::DBCluster
 
-  # Lambda functions will be added in subsequent tasks
-  # Step Functions state machine will be added in subsequent tasks
+  # SNS Topic for Pipeline Notifications
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "els-pipeline-notifications-${EnvironmentName}"
+      DisplayName: ELS Pipeline Notifications
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # IAM Role for Step Functions State Machine
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "els-step-functions-role-${EnvironmentName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:els-*-${EnvironmentName}"
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref PipelineNotificationTopic
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vendedlogs/states/*"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Step Functions State Machine for Core Pipeline (without embeddings/recommendations)
+  PipelineStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub "els-core-pipeline-${EnvironmentName}"
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      LoggingConfiguration:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt PipelineLogGroup.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "ELS Normalization Pipeline - Core Stages (without embeddings/recommendations)",
+          "StartAt": "Ingestion",
+          "States": {
+            "Ingestion": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:els-ingester-${EnvironmentName}",
+                "Payload": {
+                  "run_id.$": "$.run_id",
+                  "file_path.$": "$.file_path",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year",
+                  "source_url.$": "$.source_url",
+                  "publishing_agency.$": "$.publishing_agency",
+                  "filename.$": "$.filename"
+                }
+              },
+              "ResultPath": "$.ingestion_result",
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error_info",
+                  "Next": "NotifyFailure"
+                }
+              ],
+              "Next": "CheckIngestionStatus"
+            },
+            "CheckIngestionStatus": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.ingestion_result.Payload.status",
+                  "StringEquals": "error",
+                  "Next": "FormatIngestionError"
+                }
+              ],
+              "Default": "TextExtraction"
+            },
+            "FormatIngestionError": {
+              "Type": "Pass",
+              "Parameters": {
+                "run_id.$": "$.run_id",
+                "country.$": "$.country",
+                "state.$": "$.state",
+                "version_year.$": "$.version_year",
+                "error_info": {
+                  "stage": "ingestion",
+                  "error.$": "$.ingestion_result.Payload.error",
+                  "error_type.$": "$.ingestion_result.Payload.error_type"
+                }
+              },
+              "Next": "NotifyFailure"
+            },
+            "TextExtraction": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:els-text-extractor-${EnvironmentName}",
+                "Payload": {
+                  "run_id.$": "$.run_id",
+                  "output_artifact.$": "$.ingestion_result.Payload.output_artifact",
+                  "s3_version_id.$": "$.ingestion_result.Payload.s3_version_id",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year"
+                }
+              },
+              "ResultPath": "$.extraction_result",
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error_info",
+                  "Next": "NotifyFailure"
+                }
+              ],
+              "Next": "CheckExtractionStatus"
+            },
+            "CheckExtractionStatus": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.extraction_result.Payload.status",
+                  "StringEquals": "error",
+                  "Next": "FormatExtractionError"
+                }
+              ],
+              "Default": "StructureDetection"
+            },
+            "FormatExtractionError": {
+              "Type": "Pass",
+              "Parameters": {
+                "run_id.$": "$.run_id",
+                "country.$": "$.country",
+                "state.$": "$.state",
+                "version_year.$": "$.version_year",
+                "error_info": {
+                  "stage": "extraction",
+                  "error.$": "$.extraction_result.Payload.error",
+                  "error_type.$": "$.extraction_result.Payload.error_type"
+                }
+              },
+              "Next": "NotifyFailure"
+            },
+            "StructureDetection": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:els-structure-detector-${EnvironmentName}",
+                "Payload": {
+                  "run_id.$": "$.run_id",
+                  "output_artifact.$": "$.extraction_result.Payload.output_artifact",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year"
+                }
+              },
+              "ResultPath": "$.detection_result",
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error_info",
+                  "Next": "NotifyFailure"
+                }
+              ],
+              "Next": "CheckDetectionStatus"
+            },
+            "CheckDetectionStatus": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.detection_result.Payload.status",
+                  "StringEquals": "error",
+                  "Next": "FormatDetectionError"
+                }
+              ],
+              "Default": "HierarchyParsing"
+            },
+            "FormatDetectionError": {
+              "Type": "Pass",
+              "Parameters": {
+                "run_id.$": "$.run_id",
+                "country.$": "$.country",
+                "state.$": "$.state",
+                "version_year.$": "$.version_year",
+                "error_info": {
+                  "stage": "detection",
+                  "error.$": "$.detection_result.Payload.error",
+                  "error_type.$": "$.detection_result.Payload.error_type"
+                }
+              },
+              "Next": "NotifyFailure"
+            },
+            "HierarchyParsing": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:els-hierarchy-parser-${EnvironmentName}",
+                "Payload": {
+                  "run_id.$": "$.run_id",
+                  "output_artifact.$": "$.detection_result.Payload.output_artifact",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year"
+                }
+              },
+              "ResultPath": "$.parsing_result",
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error_info",
+                  "Next": "NotifyFailure"
+                }
+              ],
+              "Next": "CheckParsingStatus"
+            },
+            "CheckParsingStatus": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.parsing_result.Payload.status",
+                  "StringEquals": "error",
+                  "Next": "FormatParsingError"
+                }
+              ],
+              "Default": "Validation"
+            },
+            "FormatParsingError": {
+              "Type": "Pass",
+              "Parameters": {
+                "run_id.$": "$.run_id",
+                "country.$": "$.country",
+                "state.$": "$.state",
+                "version_year.$": "$.version_year",
+                "error_info": {
+                  "stage": "parsing",
+                  "error.$": "$.parsing_result.Payload.error",
+                  "error_type.$": "$.parsing_result.Payload.error_type"
+                }
+              },
+              "Next": "NotifyFailure"
+            },
+            "Validation": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:els-validator-${EnvironmentName}",
+                "Payload": {
+                  "run_id.$": "$.run_id",
+                  "output_artifact.$": "$.parsing_result.Payload.output_artifact",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year"
+                }
+              },
+              "ResultPath": "$.validation_result",
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error_info",
+                  "Next": "NotifyFailure"
+                }
+              ],
+              "Next": "CheckValidationStatus"
+            },
+            "CheckValidationStatus": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.validation_result.Payload.status",
+                  "StringEquals": "error",
+                  "Next": "FormatValidationError"
+                }
+              ],
+              "Default": "DataPersistence"
+            },
+            "FormatValidationError": {
+              "Type": "Pass",
+              "Parameters": {
+                "run_id.$": "$.run_id",
+                "country.$": "$.country",
+                "state.$": "$.state",
+                "version_year.$": "$.version_year",
+                "error_info": {
+                  "stage": "validation",
+                  "error.$": "$.validation_result.Payload.error",
+                  "error_type.$": "$.validation_result.Payload.error_type"
+                }
+              },
+              "Next": "NotifyFailure"
+            },
+            "DataPersistence": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:els-persistence-${EnvironmentName}",
+                "Payload": {
+                  "run_id.$": "$.run_id",
+                  "output_artifact.$": "$.validation_result.Payload.output_artifact",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year"
+                }
+              },
+              "ResultPath": "$.persistence_result",
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error_info",
+                  "Next": "NotifyFailure"
+                }
+              ],
+              "Next": "CheckPersistenceStatus"
+            },
+            "CheckPersistenceStatus": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.persistence_result.Payload.status",
+                  "StringEquals": "error",
+                  "Next": "FormatPersistenceError"
+                }
+              ],
+              "Default": "NotifySuccess"
+            },
+            "FormatPersistenceError": {
+              "Type": "Pass",
+              "Parameters": {
+                "run_id.$": "$.run_id",
+                "country.$": "$.country",
+                "state.$": "$.state",
+                "version_year.$": "$.version_year",
+                "error_info": {
+                  "stage": "persistence",
+                  "error.$": "$.persistence_result.Payload.error",
+                  "error_type.$": "$.persistence_result.Payload.error_type"
+                }
+              },
+              "Next": "NotifyFailure"
+            },
+            "NotifySuccess": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${PipelineNotificationTopic}",
+                "Subject": "ELS Pipeline Completed Successfully",
+                "Message": {
+                  "run_id.$": "$.run_id",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year",
+                  "status": "completed",
+                  "total_indicators.$": "$.parsing_result.Payload.total_indicators",
+                  "total_validated.$": "$.validation_result.Payload.total_validated",
+                  "records_persisted.$": "$.persistence_result.Payload.records_persisted"
+                }
+              },
+              "End": true
+            },
+            "NotifyFailure": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${PipelineNotificationTopic}",
+                "Subject": "ELS Pipeline Failed",
+                "Message": {
+                  "run_id.$": "$.run_id",
+                  "country.$": "$.country",
+                  "state.$": "$.state",
+                  "version_year.$": "$.version_year",
+                  "status": "failed",
+                  "error_info.$": "$.error_info"
+                }
+              },
+              "Next": "FailState"
+            },
+            "FailState": {
+              "Type": "Fail",
+              "Error": "PipelineExecutionFailed",
+              "Cause": "One or more pipeline stages failed"
+            }
+          }
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # CloudWatch Log Group for Step Functions
+  PipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vendedlogs/states/els-pipeline-${EnvironmentName}"
+      RetentionInDays: 30
 
   # Lambda Environment Variables Configuration
   # All Lambda functions should include these environment variables:
@@ -436,7 +1112,6 @@ Resources:
   # - DB_SECRET_ARN: !Ref DatabaseSecret
   # - DB_CLUSTER_ARN: !GetAtt DatabaseCluster.DBClusterArn
   # - ENVIRONMENT: !Ref EnvironmentName
-  # - AWS_REGION: !Ref AWS::Region
   # - COUNTRY_CODE_VALIDATION: "enabled" (validates ISO 3166-1 alpha-2)
   # - S3_PATH_PATTERN: "{country}/{state}/{year}/{identifier}"
 
@@ -557,3 +1232,64 @@ Outputs:
     Value: !Ref DatabaseSubnet2
     Export:
       Name: !Sub "${AWS::StackName}-DatabaseSubnet2Id"
+
+  PipelineStateMachineArn:
+    Description: ARN of the Step Functions state machine for core pipeline
+    Value: !Ref PipelineStateMachine
+    Export:
+      Name: !Sub "${AWS::StackName}-PipelineStateMachineArn"
+
+  PipelineNotificationTopicArn:
+    Description: ARN of the SNS topic for pipeline notifications
+    Value: !Ref PipelineNotificationTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-PipelineNotificationTopicArn"
+
+  StepFunctionsExecutionRoleArn:
+    Description: ARN of the Step Functions execution role
+    Value: !GetAtt StepFunctionsExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StepFunctionsExecutionRoleArn"
+
+  PipelineLogGroupName:
+    Description: CloudWatch Log Group for Step Functions
+    Value: !Ref PipelineLogGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-PipelineLogGroupName"
+
+  # Lambda Function ARNs
+  IngesterLambdaFunctionArn:
+    Description: ARN of the Ingester Lambda function
+    Value: !GetAtt IngesterLambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-IngesterLambdaFunctionArn"
+
+  TextExtractorLambdaFunctionArn:
+    Description: ARN of the Text Extractor Lambda function
+    Value: !GetAtt TextExtractorLambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TextExtractorLambdaFunctionArn"
+
+  StructureDetectorLambdaFunctionArn:
+    Description: ARN of the Structure Detector Lambda function
+    Value: !GetAtt StructureDetectorLambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StructureDetectorLambdaFunctionArn"
+
+  HierarchyParserLambdaFunctionArn:
+    Description: ARN of the Hierarchy Parser Lambda function
+    Value: !GetAtt HierarchyParserLambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-HierarchyParserLambdaFunctionArn"
+
+  ValidatorLambdaFunctionArn:
+    Description: ARN of the Validator Lambda function
+    Value: !GetAtt ValidatorLambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ValidatorLambdaFunctionArn"
+
+  PersistenceLambdaFunctionArn:
+    Description: ARN of the Persistence Lambda function
+    Value: !GetAtt PersistenceLambdaFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PersistenceLambdaFunctionArn"

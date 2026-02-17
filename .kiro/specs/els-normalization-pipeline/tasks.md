@@ -248,8 +248,8 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
 - [ ] 11. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Implement Pipeline Orchestrator (without embeddings and recommendations)
-  - [ ] 12.1 Implement `orchestrator.py` with `start_pipeline()`, `rerun_stage()`, and `get_pipeline_status()` functions
+- [x] 12. Implement Pipeline Orchestrator (without embeddings and recommendations)
+  - [x] 12.1 Implement `orchestrator.py` with `start_pipeline()`, `rerun_stage()`, and `get_pipeline_status()` functions
     - Chain stages in order: ingestion → extraction → detection → parsing → validation → persistence
     - Record PipelineStageResult for each stage (name, status, duration_ms, output_artifact)
     - On failure: halt, record error, preserve partial results
@@ -257,46 +257,46 @@ Implement the ELS normalization pipeline as a set of Python modules with AWS Lam
     - Support re-running individual stages by reading previous stage output from S3
     - Include country parameter in pipeline execution
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
-  - [ ] 12.2 Create AWS Step Functions state machine definition in CloudFormation wiring Lambda handlers for core pipeline stages
+  - [x] 12.2 Create AWS Step Functions state machine definition in CloudFormation wiring Lambda handlers for core pipeline stages
     - Define states for each pipeline stage with error catching and retry configuration
     - Configure SNS topic and subscription for pipeline completion and failure notifications
     - Add Step Functions state machine, SNS topic, and execution IAM role to CloudFormation template
     - _Requirements: 9.1, 9.3_
-  - [ ] 12.3 Write property tests for pipeline orchestrator
+  - [x] 12.3 Write property tests for pipeline orchestrator
     - **Property 26: Pipeline Stage Result Completeness** — Every stage result has stage_name, status, duration_ms, output_artifact
     - **Validates: Requirements 9.2**
     - **Property 27: Pipeline Run Counts Invariant** — total_validated <= total_indicators
     - **Validates: Requirements 9.4**
-  - [ ] 12.4 Write integration tests for pipeline orchestrator
+  - [x] 12.4 Write integration tests for pipeline orchestrator
     - Test full pipeline execution with mocked stage functions
     - Test error handling and partial result preservation
     - Test stage re-run functionality
     - Test pipeline status tracking
-  - [ ] 12.5 Create manual AWS test script for core pipeline
+  - [x] 12.5 Create manual AWS test script for core pipeline
     - Script: `scripts/test_pipeline_manual.py`
     - Test complete pipeline execution with Step Functions (without embeddings/recommendations)
     - Monitor execution status and stage transitions
     - Verify SNS notifications
     - Include environment variable setup instructions
 
-- [ ] 13. Integration wiring and Lambda handlers (core pipeline)
-  - [ ] 13.1 Create Lambda handler entry points for core pipeline stages
+- [x] 13. Integration wiring and Lambda handlers (core pipeline)
+  - [x] 13.1 Create Lambda handler entry points for core pipeline stages
     - Each handler: parse event, call module function, return result for Step Functions
     - Shared error handling wrapper for consistent error reporting
     - Handlers for: ingestion, extraction, detection, parsing, validation
     - _Requirements: 9.1_
-  - [ ] 13.2 Consolidate and validate the CloudFormation template for core pipeline
+  - [x] 13.2 Consolidate and validate the CloudFormation template for core pipeline
     - Ensure all resources from previous tasks are correctly wired (S3 buckets, Lambdas, Step Functions, Aurora, SNS, IAM roles, VPC)
     - Add CloudFormation outputs for key resource ARNs and endpoints
     - Validate template with `aws cloudformation validate-template`
     - Add a deploy script (`scripts/deploy.sh`) that packages Lambda code and deploys the stack
     - _Requirements: 1.1, 1.3, 7.1, 9.1_
-  - [ ] 13.3 Write end-to-end integration tests for core pipeline
+  - [x] 13.3 Write end-to-end integration tests for core pipeline
     - Test complete pipeline with core stages using mocked AWS services
     - Test error propagation and recovery
     - Test data flow between stages
     - Verify final outputs in all storage locations
-  - [ ] 13.4 Create comprehensive AWS deployment and testing guide for core pipeline
+  - [x] 13.4 Create comprehensive AWS deployment and testing guide for core pipeline
     - Document: `documentation/AWS_TESTING.md`
     - Include pre-deployment checklist
     - Step-by-step deployment instructions
