@@ -138,6 +138,7 @@ class NormalizedStandard(BaseModel):
 class ParseResult(BaseModel):
     """Result of hierarchy parsing."""
     standards: List[NormalizedStandard]
+    indicators: List[Dict[str, Any]]  # Serialized NormalizedStandard objects for S3 persistence
     orphaned_elements: List[DetectedElement]
     status: str
     error: Optional[str] = None

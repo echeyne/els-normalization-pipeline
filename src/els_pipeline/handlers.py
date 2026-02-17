@@ -8,7 +8,10 @@ error handling and logging for AWS Lambda execution.
 import json
 import logging
 import traceback
+from datetime import datetime, timezone
 from typing import Dict, Any
+
+from botocore.exceptions import ClientError
 
 from .ingester import ingest_document
 from .extractor import extract_text
@@ -16,6 +19,8 @@ from .detector import detect_structure
 from .parser import parse_hierarchy
 from .validator import validate_record, serialize_record
 from .models import IngestionRequest
+from .config import Config
+from .s3_helpers import save_json_to_s3, load_json_from_s3, construct_intermediate_key
 
 # Configure logging
 logger = logging.getLogger()
@@ -155,9 +160,36 @@ def extraction_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if result.status == "error":
             return _handle_error("text_extraction", Exception(result.error), event)
         
-        # Store extracted blocks to S3 for next stage
-        # In production, this would write to S3
-        output_key = f"{s3_key}.extracted.json"
+        # Prepare extraction output JSON
+        extraction_output = {
+            "blocks": [block.model_dump() for block in result.blocks],
+            "total_pages": result.total_pages,
+            "total_blocks": len(result.blocks),
+            "extraction_timestamp": datetime.now(timezone.utc).isoformat(),
+            "source_s3_key": s3_key,
+            "source_version_id": s3_version_id
+        }
+        
+        # Construct S3 key for extraction output
+        output_key = construct_intermediate_key(
+            event["country"],
+            event["state"],
+            event["version_year"],
+            "extraction",
+            event["run_id"]
+        )
+        
+        # Save extraction output to S3
+        try:
+            save_json_to_s3(extraction_output, Config.S3_PROCESSED_BUCKET, output_key)
+            logger.info(
+                f"Saved extraction output to S3: {output_key}, "
+                f"total_pages={result.total_pages}, total_blocks={len(result.blocks)}"
+            )
+        except ClientError as e:
+            error_msg = f"Failed to save extraction output to S3: {output_key}"
+            logger.error(f"{error_msg}: {e}")
+            return _handle_error("text_extraction", Exception(error_msg), event)
         
         logger.info(f"Text extraction completed: total_pages={result.total_pages}")
         
@@ -179,7 +211,7 @@ def extraction_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 def detection_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for structure detection stage.
-    
+
     Expected event structure:
     {
         "run_id": str,
@@ -188,7 +220,7 @@ def detection_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         "state": str,
         "version_year": int
     }
-    
+
     Returns:
         {
             "status": "success" | "error",
@@ -203,22 +235,60 @@ def detection_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         logger.info(f"Starting structure detection: run_id={event.get('run_id')}, country={event.get('country')}")
-        
-        # In production, read blocks from S3
-        # For now, assume blocks are in event or read from S3
-        blocks = []  # Would load from event["output_artifact"]
-        
+
+        # Load extraction output from S3
+        extraction_key = event["output_artifact"]
+
+        try:
+            extraction_output = load_json_from_s3(Config.S3_PROCESSED_BUCKET, extraction_key)
+            blocks_data = extraction_output["blocks"]
+            logger.info(f"Loaded {len(blocks_data)} blocks from S3: {extraction_key}")
+            
+            # Convert dictionary blocks to TextBlock instances
+            from els_pipeline.models import TextBlock
+            blocks = [TextBlock(**block_dict) for block_dict in blocks_data]
+            logger.info(f"Converted {len(blocks)} blocks to TextBlock instances")
+        except ClientError as e:
+            error_msg = f"Failed to load extraction output from S3: {extraction_key}"
+            logger.error(f"{error_msg} - {str(e)}")
+            return _handle_error("structure_detection", Exception(error_msg), event)
+        except Exception as e:
+            error_msg = f"Failed to convert blocks to TextBlock instances: {str(e)}"
+            logger.error(error_msg)
+            return _handle_error("structure_detection", Exception(error_msg), event)
+
         # Detect structure
         result = detect_structure(blocks)
-        
+
         if result.status == "error":
             return _handle_error("structure_detection", Exception(result.error), event)
-        
-        # Store detected elements to S3
-        output_key = f"{event['output_artifact']}.detected.json"
-        
+
+        # Prepare detection output JSON
+        detection_output = {
+            "elements": [elem.model_dump() for elem in result.elements],  # Serialize Pydantic models to dicts
+            "review_count": result.review_count,
+            "detection_timestamp": datetime.now(timezone.utc).isoformat(),
+            "source_extraction_key": extraction_key
+        }
+
+        # Save detection output to S3
+        output_key = construct_intermediate_key(
+            event["country"],
+            event["state"],
+            event["version_year"],
+            "detection",
+            event["run_id"]
+        )
+
+        try:
+            save_json_to_s3(detection_output, Config.S3_PROCESSED_BUCKET, output_key)
+            logger.info(f"Saved detection output to S3: {output_key}")
+        except ClientError as e:
+            logger.error(f"Failed to save detection output to S3: {output_key} - {str(e)}")
+            return _handle_error("structure_detection", e, event)
+
         logger.info(f"Structure detection completed: review_count={result.review_count}")
-        
+
         return {
             "status": "success",
             "stage_name": "structure_detection",
@@ -229,7 +299,7 @@ def detection_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "version_year": event["version_year"],
             "run_id": event.get("run_id")
         }
-        
+
     except Exception as e:
         return _handle_error("structure_detection", e, event)
 
@@ -237,7 +307,7 @@ def detection_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for hierarchy parsing stage.
-    
+
     Expected event structure:
     {
         "run_id": str,
@@ -246,7 +316,7 @@ def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         "state": str,
         "version_year": int
     }
-    
+
     Returns:
         {
             "status": "success" | "error",
@@ -262,10 +332,28 @@ def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         logger.info(f"Starting hierarchy parsing: run_id={event.get('run_id')}, country={event.get('country')}")
-        
-        # In production, read detected elements from S3
-        elements = []  # Would load from event["output_artifact"]
-        
+
+        # Load detection output from S3
+        detection_key = event["output_artifact"]
+
+        try:
+            detection_output = load_json_from_s3(Config.S3_PROCESSED_BUCKET, detection_key)
+            elements_data = detection_output["elements"]
+            logger.info(f"Loaded {len(elements_data)} elements from S3: {detection_key}")
+
+            # Convert dictionary elements to DetectedElement instances
+            from els_pipeline.models import DetectedElement
+            elements = [DetectedElement(**elem_dict) for elem_dict in elements_data]
+            logger.info(f"Converted {len(elements)} elements to DetectedElement instances")
+        except ClientError as e:
+            error_msg = f"Failed to load detection output from S3: {detection_key}"
+            logger.error(f"{error_msg} - {str(e)}")
+            return _handle_error("hierarchy_parsing", Exception(error_msg), event)
+        except Exception as e:
+            error_msg = f"Failed to convert elements to DetectedElement instances: {str(e)}"
+            logger.error(error_msg)
+            return _handle_error("hierarchy_parsing", Exception(error_msg), event)
+
         # Parse hierarchy
         result = parse_hierarchy(
             elements=elements,
@@ -273,19 +361,40 @@ def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             state=event["state"],
             version_year=event["version_year"]
         )
-        
+
         if result.status == "error":
             return _handle_error("hierarchy_parsing", Exception(result.error), event)
-        
-        # Store parsed standards to S3
-        output_key = f"{event['output_artifact']}.parsed.json"
-        
+
+        # Prepare parsing output JSON
+        parsing_output = {
+            "indicators": result.indicators,  # Already serialized in ParseResult
+            "total_indicators": len(result.indicators),
+            "parsing_timestamp": datetime.now(timezone.utc).isoformat(),
+            "source_detection_key": detection_key
+        }
+
+        # Save parsing output to S3
+        output_key = construct_intermediate_key(
+            event["country"],
+            event["state"],
+            event["version_year"],
+            "parsing",
+            event["run_id"]
+        )
+
+        try:
+            save_json_to_s3(parsing_output, Config.S3_PROCESSED_BUCKET, output_key)
+            logger.info(f"Saved parsing output to S3: {output_key}")
+        except ClientError as e:
+            logger.error(f"Failed to save parsing output to S3: {output_key} - {str(e)}")
+            return _handle_error("hierarchy_parsing", e, event)
+
         logger.info(
             f"Hierarchy parsing completed: "
             f"total_indicators={len(result.standards)}, "
             f"orphaned={len(result.orphaned_elements)}"
         )
-        
+
         return {
             "status": "success",
             "stage_name": "hierarchy_parsing",
@@ -297,7 +406,7 @@ def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "version_year": event["version_year"],
             "run_id": event.get("run_id")
         }
-        
+
     except Exception as e:
         return _handle_error("hierarchy_parsing", e, event)
 

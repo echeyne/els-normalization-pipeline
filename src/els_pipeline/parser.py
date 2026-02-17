@@ -307,6 +307,7 @@ def parse_hierarchy(
         if not valid_elements:
             return ParseResult(
                 standards=[],
+                indicators=[],
                 orphaned_elements=elements,
                 status=StatusEnum.ERROR.value,
                 error="No valid elements to parse (all flagged for review)",
@@ -334,6 +335,7 @@ def parse_hierarchy(
         if not domains:
             return ParseResult(
                 standards=[],
+                indicators=[],
                 orphaned_elements=valid_elements,
                 status=StatusEnum.ERROR.value,
                 error="No domain elements found",
@@ -342,6 +344,7 @@ def parse_hierarchy(
         if not indicators:
             return ParseResult(
                 standards=[],
+                indicators=[],
                 orphaned_elements=valid_elements,
                 status=StatusEnum.ERROR.value,
                 error="No indicator elements found",
@@ -452,6 +455,7 @@ def parse_hierarchy(
         
         return ParseResult(
             standards=standards,
+            indicators=[standard.model_dump() for standard in standards],
             orphaned_elements=orphaned,
             status=StatusEnum.SUCCESS.value,
             error=None,
@@ -460,6 +464,7 @@ def parse_hierarchy(
     except Exception as e:
         return ParseResult(
             standards=[],
+            indicators=[],
             orphaned_elements=elements,
             status=StatusEnum.ERROR.value,
             error=f"Parsing failed: {str(e)}",

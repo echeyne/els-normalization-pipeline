@@ -115,6 +115,14 @@ Resources:
                   - s3:ListBucket
                   - s3:ListBucketVersions
                 Resource: !GetAtt RawDocumentsBucket.Arn
+        - PolicyName: S3ProcessedBucketWriteAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${ProcessedJsonBucket.Arn}/*/intermediate/extraction/*"
         - PolicyName: TextractAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -149,6 +157,22 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
+        - PolicyName: S3ExtractionReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${ProcessedJsonBucket.Arn}/*/intermediate/extraction/*"
+        - PolicyName: S3DetectionWriteAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${ProcessedJsonBucket.Arn}/*/intermediate/detection/*"
         - PolicyName: BedrockInvokeAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -326,6 +350,7 @@ Resources:
       Environment:
         Variables:
           ELS_RAW_BUCKET: !Ref RawDocumentsBucket
+          ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
           ENVIRONMENT: !Ref EnvironmentName
       Code:
         S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
@@ -348,7 +373,8 @@ Resources:
       MemorySize: 1024
       Environment:
         Variables:
-          BEDROCK_LLM_MODEL_ID: "us.anthropic.claude-sonnet-4-5-v2:0"
+          ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
+          BEDROCK_LLM_MODEL_ID: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
           CONFIDENCE_THRESHOLD: "0.7"
           ENVIRONMENT: !Ref EnvironmentName
       Code:
@@ -372,6 +398,7 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
+          ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
           ENVIRONMENT: !Ref EnvironmentName
       Code:
         S3Bucket: !Sub "els-lambda-code-${EnvironmentName}-${AWS::AccountId}"
