@@ -15,12 +15,17 @@ Environment Variables:
 - CONFIDENCE_THRESHOLD: Confidence threshold for review flagging (default: 0.7)
 
 Usage:
+    # Test with sample blocks:
     python scripts/test_detector_manual.py
+    
+    # Test with extraction file:
+    python scripts/test_detector_manual.py extraction_sample.json
 """
 
 import sys
 import os
 import json
+import logging
 from pathlib import Path
 
 # Add src to path
@@ -28,6 +33,38 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.els_pipeline.detector import detect_structure
 from src.els_pipeline.models import TextBlock
+
+# Configure logging to see detailed output
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
+
+
+def load_extraction_data(filepath: str) -> list[TextBlock]:
+    """Load extraction data and convert to TextBlock objects."""
+    logger.info(f"Loading extraction data from {filepath}")
+    
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+    
+    blocks = []
+    for block_data in data['blocks']:
+        block = TextBlock(
+            text=block_data['text'],
+            page_number=block_data['page_number'],
+            block_type=block_data['block_type'],
+            confidence=block_data['confidence'],
+            geometry=block_data.get('geometry', {}),
+            row_index=block_data.get('row_index'),
+            col_index=block_data.get('col_index')
+        )
+        blocks.append(block)
+    
+    logger.info(f"Loaded {len(blocks)} text blocks")
+    return blocks
 
 
 def create_sample_text_blocks():
@@ -364,11 +401,24 @@ def main():
     print(f"  BEDROCK_LLM_MODEL_ID:  {os.getenv('BEDROCK_LLM_MODEL_ID', 'anthropic.claude-sonnet-4-5-20250929-v1:0')}")
     print(f"  CONFIDENCE_THRESHOLD:  {os.getenv('CONFIDENCE_THRESHOLD', '0.7')}")
     
-    # Create sample text blocks
-    print_section("Creating Sample Text Blocks")
-    text_blocks = create_sample_text_blocks()
-    print(f"\n  Created {len(text_blocks)} text blocks from page 4 of the actual document")
-    print(f"  (Extracted using AWS Textract from California Preschool/TK Learning Foundations)")
+    # Determine if we're loading from file or using sample blocks
+    if len(sys.argv) > 1:
+        extraction_file = sys.argv[1]
+        if not Path(extraction_file).exists():
+            logger.error(f"File not found: {extraction_file}")
+            logger.info("Please provide a valid extraction file path")
+            return 1
+        
+        print_section("Loading Extraction Data from File")
+        print(f"\n  Loading from: {extraction_file}")
+        text_blocks = load_extraction_data(extraction_file)
+        print(f"  Loaded {len(text_blocks)} text blocks")
+    else:
+        # Create sample text blocks
+        print_section("Creating Sample Text Blocks")
+        text_blocks = create_sample_text_blocks()
+        print(f"\n  Created {len(text_blocks)} text blocks from page 4 of the actual document")
+        print(f"  (Extracted using AWS Textract from California Preschool/TK Learning Foundations)")
     
     # Run structure detection
     print_section("Running Structure Detection")
@@ -396,8 +446,17 @@ def main():
         if result.elements:
             print_section("Detected Elements")
             
-            for idx, element in enumerate(result.elements):
-                print_element(element, idx)
+            # Show first 20 elements in detail
+            display_count = min(20, len(result.elements))
+            for idx in range(display_count):
+                print_element(result.elements[idx], idx)
+            
+            if len(result.elements) > display_count:
+                print(f"\n  ... and {len(result.elements) - display_count} more elements")
+                print("\n  Additional elements (summary):")
+                for idx in range(display_count, len(result.elements)):
+                    elem = result.elements[idx]
+                    print(f"    {idx + 1}. [{elem.level.value}] {elem.code} - {elem.title[:50]} (conf: {elem.confidence:.2f})")
             
             # Summary by level
             print_section("Summary by Hierarchy Level")

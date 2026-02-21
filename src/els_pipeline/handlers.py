@@ -414,7 +414,7 @@ def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 def validation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for validation stage.
-    
+
     Expected event structure:
     {
         "run_id": str,
@@ -424,12 +424,12 @@ def validation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         "state": str,
         "version_year": int
     }
-    
+
     Returns:
         {
             "status": "success" | "error",
             "stage_name": "validation",
-            "output_artifact": str (S3 key with validated records),
+            "output_artifact": str (S3 key with validation summary),
             "total_indicators": int,
             "total_validated": int,
             "country": str,
@@ -440,44 +440,108 @@ def validation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         logger.info(f"Starting validation: run_id={event.get('run_id')}, country={event.get('country')}")
-        
-        # In production, read parsed standards from S3
-        standards = []  # Would load from event["output_artifact"]
-        
-        validated_count = 0
-        # Validate each standard
-        for standard in standards:
-            # Serialize to canonical JSON
-            record = serialize_record(standard, {}, {})
-            
-            # Validate
-            validation_result = validate_record(record)
-            if validation_result.is_valid:
-                validated_count += 1
-                # Store to S3 processed bucket
-        
-        output_key = f"{event['output_artifact']}.validated.json"
-        
+
+        # Load parsing output from S3
+        parsing_key = event["output_artifact"]
+
+        try:
+            parsing_output = load_json_from_s3(Config.S3_PROCESSED_BUCKET, parsing_key)
+            indicators = parsing_output["indicators"]
+            logger.info(f"Loaded {len(indicators)} indicators from S3: {parsing_key}")
+        except ClientError as e:
+            error_msg = f"Failed to load parsing output from S3: {parsing_key}"
+            logger.error(f"{error_msg} - {str(e)}")
+            return _handle_error("validation", Exception(error_msg), event)
+
+        # Validate each indicator and save to S3
+        validated_records = []
+        validation_errors = []
+
+        for indicator in indicators:
+            # Validate the indicator (which is already in canonical JSON format)
+            result = validate_record(indicator)
+
+            if result.is_valid:
+                # Extract standard_id from the indicator
+                standard_id = indicator.get("standard", {}).get("standard_id")
+
+                if not standard_id:
+                    logger.error(f"Indicator missing standard_id: {indicator}")
+                    validation_errors.append({
+                        "indicator": indicator,
+                        "error": "Missing standard_id"
+                    })
+                    continue
+
+                # Save individual canonical record
+                record_key = f"{event['country']}/{event['state']}/{event['version_year']}/{standard_id}.json"
+
+                try:
+                    save_json_to_s3(indicator, Config.S3_PROCESSED_BUCKET, record_key)
+                    validated_records.append(record_key)
+                    logger.info(f"Saved canonical record to S3: {record_key}")
+                except ClientError as e:
+                    logger.error(f"Failed to save canonical record {standard_id}: {e}")
+                    validation_errors.append({
+                        "standard_id": standard_id,
+                        "error": str(e)
+                    })
+            else:
+                # Collect validation errors
+                validation_errors.append({
+                    "indicator": indicator,
+                    "errors": [{"field": err.field_path, "message": err.message, "type": err.error_type}
+                              for err in result.errors]
+                })
+                logger.warning(f"Validation failed for indicator: {result.errors}")
+
+        # Prepare validation summary
+        validation_summary = {
+            "validated_records": validated_records,
+            "total_validated": len(validated_records),
+            "validation_errors": validation_errors,
+            "validation_timestamp": datetime.now(timezone.utc).isoformat(),
+            "source_parsing_key": parsing_key
+        }
+
+        # Save validation summary to S3
+        output_key = construct_intermediate_key(
+            event["country"],
+            event["state"],
+            event["version_year"],
+            "validation",
+            event["run_id"]
+        )
+
+        try:
+            save_json_to_s3(validation_summary, Config.S3_PROCESSED_BUCKET, output_key)
+            logger.info(f"Saved validation summary to S3: {output_key}")
+        except ClientError as e:
+            logger.error(f"Failed to save validation summary: {e}")
+            return _handle_error("validation", e, event)
+
         logger.info(
             f"Validation completed: "
-            f"total={event.get('total_indicators', 0)}, "
-            f"validated={validated_count}"
+            f"total={len(indicators)}, "
+            f"validated={len(validated_records)}, "
+            f"errors={len(validation_errors)}"
         )
-        
+
         return {
             "status": "success",
             "stage_name": "validation",
             "output_artifact": output_key,
-            "total_indicators": event.get("total_indicators", 0),
-            "total_validated": validated_count,
+            "total_indicators": len(indicators),
+            "total_validated": len(validated_records),
             "country": event["country"],
             "state": event["state"],
             "version_year": event["version_year"],
             "run_id": event.get("run_id")
         }
-        
+
     except Exception as e:
         return _handle_error("validation", e, event)
+
 
 
 def embedding_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

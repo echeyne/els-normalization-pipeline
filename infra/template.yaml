@@ -180,11 +180,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource:
-                  # Claude Sonnet 4.5 - Latest model for optimal structured extraction
-                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
-                  # Fallback to other Claude models if needed
-                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-*"
+                Resource: "*"
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -205,6 +201,23 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3DetectionReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${ProcessedJsonBucket.Arn}/*/intermediate/detection/*"
+        - PolicyName: S3ParsingWriteAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${ProcessedJsonBucket.Arn}/*/intermediate/parsing/*"
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -251,6 +264,14 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
+        - PolicyName: S3ParsingReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${ProcessedJsonBucket.Arn}/*/intermediate/parsing/*"
         - PolicyName: S3ProcessedBucketAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -260,10 +281,12 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                   - s3:GetObjectVersion
-                  - s3:ListBucket
                 Resource:
                   - !Sub "${ProcessedJsonBucket.Arn}/*"
-                  - !GetAtt ProcessedJsonBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ProcessedJsonBucket.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
