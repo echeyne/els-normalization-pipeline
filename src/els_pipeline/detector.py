@@ -18,7 +18,7 @@ DEFAULT_OVERLAP_TOKENS = 200
 MAX_PARSE_RETRIES = 2
 MAX_BEDROCK_RETRIES = 2
 LLM_TEMPERATURE = 0.1
-LLM_MAX_TOKENS = 4096
+LLM_MAX_TOKENS = 16000
 
 
 def estimate_tokens(text: str) -> int:
@@ -133,7 +133,7 @@ def build_detection_prompt(blocks: List[TextBlock]) -> str:
     
     prompt = f"""You are extracting the hierarchical structure from an early learning standards document. Your job is to identify every structural element and classify it into the correct hierarchy level.
 
-STRICT RULE: You must use ONLY the exact titles, codes, numbers, and names that appear in the document text. Do NOT invent, rephrase, abbreviate, or infer any titles or codes. If the document says "Strand: 1.0 — Motivation to Learn", that is the title. If the document says "Foundation 1.1 Curiosity and Interest", that is the title. Copy them verbatim.
+STRICT RULE: You must use ONLY the exact titles, codes (as applicable), numbers, and names that appear in the document text. Do NOT invent any titles. If a code does not exist, assign an appropriate one.
 
 HIERARCHY LEVELS (from highest to lowest):
 1. "domain" — The broadest organizational category. These are top-level developmental areas that contain everything else. They typically appear as section headers or in a table of contents.
@@ -151,7 +151,7 @@ HOW TO CLASSIFY:
 
 FIELD INSTRUCTIONS:
 - "level": One of "domain", "subdomain", "strand", or "indicator".
-- "code": The exact code or number from the document (e.g., "1.0", "1.1", "ATL"). If the document does not assign a code, use an empty string "".
+- "code": The code or number from the document (e.g., "1.0", "1.1", "ATL"). If the document does not assign a code, apply an appropriate one"".
 - "title": The exact title as written in the document. Do NOT paraphrase or shorten it.
 - "description": The full descriptive text associated with this element, including any age-band details. Combine all age-specific text into one description. If there is no description beyond the title, use an empty string "".
 - "confidence": A float between 0.0 and 1.0 reflecting how certain you are about the classification:
@@ -178,7 +178,6 @@ OUTPUT FORMAT — Return ONLY a JSON array. No text before or after it.
 FINAL REMINDERS:
 - Return ONLY the JSON array. No markdown, no explanation, no commentary.
 - Extract EVERY structural element you find. Do not skip any.
-- NEVER fabricate titles, codes, or descriptions. Everything must come from the document text.
 - Use the page numbers from the [Page N] markers in the text.
 
 TEXT TO ANALYZE:
@@ -205,6 +204,15 @@ def _extract_json_from_response(response_text: str) -> str:
         ValueError: If no valid JSON array is found
     """
     response_text = response_text.strip()
+    
+    # Strip markdown code fences if present (e.g. ```json ... ```)
+    if response_text.startswith("```"):
+        lines = response_text.splitlines()
+        # Drop the opening fence line and any closing fence
+        response_text = "\n".join(
+            line for line in lines[1:]
+            if not line.strip().startswith("```")
+        ).strip()
     
     logger.debug(f"Extracting JSON from response of length {len(response_text)}")
     

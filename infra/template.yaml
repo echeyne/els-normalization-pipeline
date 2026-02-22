@@ -392,12 +392,12 @@ Resources:
       Runtime: python3.11
       Handler: els_pipeline.handlers.detection_handler
       Role: !GetAtt StructureDetectorLambdaRole.Arn
-      Timeout: 300
+      Timeout: 600
       MemorySize: 1024
       Environment:
         Variables:
           ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
-          BEDROCK_LLM_MODEL_ID: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+          BEDROCK_LLM_MODEL_ID: "us.anthropic.claude-sonnet-4-6"
           CONFIDENCE_THRESHOLD: "0.7"
           ENVIRONMENT: !Ref EnvironmentName
       Code:

@@ -228,7 +228,7 @@ pytest tests/property/test_detection_props.py -v
 pytest tests/integration/test_detector_integration.py -v
 
 # Manual AWS test
-export BEDROCK_LLM_MODEL_ID="global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+export BEDROCK_LLM_MODEL_ID="us.anthropic.claude-sonnet-4-6"
 python scripts/test_detector_manual.py
 ```
 
@@ -565,7 +565,7 @@ export ELS_EMBEDDINGS_BUCKET="els-embeddings-dev-123456789012"
 export AWS_REGION="us-east-1"
 
 # Bedrock Models
-export BEDROCK_LLM_MODEL_ID="global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+export BEDROCK_LLM_MODEL_ID="us.anthropic.claude-sonnet-4-6"
 export BEDROCK_EMBEDDING_MODEL_ID="amazon.titan-embed-text-v1"
 
 # Database
