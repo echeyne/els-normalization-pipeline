@@ -458,7 +458,7 @@ def serialize_record(
             "title": document_meta["title"],
             "version_year": standard.version_year,
             "source_url": document_meta["source_url"],
-            "age_band": document_meta["age_band"],
+            "age_band": document_meta.get("age_band", "3-4"),
             "publishing_agency": document_meta["publishing_agency"],
         },
         "standard": standard_obj,

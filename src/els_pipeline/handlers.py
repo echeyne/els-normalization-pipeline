@@ -411,6 +411,53 @@ def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return _handle_error("hierarchy_parsing", e, event)
 
 
+def _indicator_to_canonical(indicator: Dict[str, Any], event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Transform a flat NormalizedStandard dict (parser output) into canonical JSON
+    format expected by the validator.
+
+    The parser emits dicts with top-level keys like country, state, domain, strand,
+    indicator, etc.  The validator expects the canonical schema with nested document,
+    standard, and metadata objects.
+    """
+    # If the record already looks canonical (has 'document' and 'standard' keys),
+    # pass it through unchanged.
+    if "document" in indicator and "standard" in indicator and "metadata" in indicator:
+        return indicator
+
+    std_obj: Dict[str, Any] = {
+        "standard_id": indicator.get("standard_id", ""),
+        "domain": indicator.get("domain") or {"code": "", "name": ""},
+        "strand": indicator.get("strand"),
+        "sub_strand": indicator.get("sub_strand"),
+        "indicator": indicator.get("indicator") or {"code": "", "description": ""},
+    }
+
+    # The indicator hierarchy level uses 'description' but the canonical schema
+    # also requires 'code'.  Ensure both are present.
+    ind = std_obj["indicator"]
+    if isinstance(ind, dict):
+        if "description" not in ind:
+            ind["description"] = ind.get("name", "")
+
+    return {
+        "country": indicator.get("country", event.get("country", "")),
+        "state": indicator.get("state", event.get("state", "")),
+        "document": {
+            "title": indicator.get("document", {}).get("title", "") if isinstance(indicator.get("document"), dict) else event.get("document_title", f"{event.get('state', '')} Early Learning Standards"),
+            "version_year": indicator.get("version_year", event.get("version_year", 0)),
+            "source_url": indicator.get("document", {}).get("source_url", "") if isinstance(indicator.get("document"), dict) else event.get("source_url", ""),
+            "age_band": indicator.get("document", {}).get("age_band", "3-4") if isinstance(indicator.get("document"), dict) else event.get("age_band", "3-4"),
+            "publishing_agency": indicator.get("document", {}).get("publishing_agency", "") if isinstance(indicator.get("document"), dict) else event.get("publishing_agency", ""),
+        },
+        "standard": std_obj,
+        "metadata": {
+            "page_number": indicator.get("source_page", 1),
+            "source_text_chunk": indicator.get("source_text", ""),
+        },
+    }
+
+
 def validation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for validation stage.
@@ -422,7 +469,11 @@ def validation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         "total_indicators": int,
         "country": str,
         "state": str,
-        "version_year": int
+        "version_year": int,
+        "source_url": str (optional, document metadata),
+        "publishing_agency": str (optional, document metadata),
+        "document_title": str (optional, document metadata),
+        "age_band": str (optional, document metadata)
     }
 
     Returns:
@@ -458,15 +509,17 @@ def validation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         validation_errors = []
 
         for indicator in indicators:
-            # Validate the indicator (which is already in canonical JSON format)
-            result = validate_record(indicator)
+            # Transform flat NormalizedStandard dict into canonical JSON format
+            # The parser outputs flat dicts; the validator expects canonical structure
+            canonical = _indicator_to_canonical(indicator, event)
+            result = validate_record(canonical)
 
             if result.is_valid:
-                # Extract standard_id from the indicator
-                standard_id = indicator.get("standard", {}).get("standard_id")
+                # Extract standard_id from the canonical record
+                standard_id = canonical.get("standard", {}).get("standard_id")
 
                 if not standard_id:
-                    logger.error(f"Indicator missing standard_id: {indicator}")
+                    logger.error(f"Indicator missing standard_id: {canonical}")
                     validation_errors.append({
                         "indicator": indicator,
                         "error": "Missing standard_id"
@@ -477,7 +530,7 @@ def validation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 record_key = f"{event['country']}/{event['state']}/{event['version_year']}/{standard_id}.json"
 
                 try:
-                    save_json_to_s3(indicator, Config.S3_PROCESSED_BUCKET, record_key)
+                    save_json_to_s3(canonical, Config.S3_PROCESSED_BUCKET, record_key)
                     validated_records.append(record_key)
                     logger.info(f"Saved canonical record to S3: {record_key}")
                 except ClientError as e:
@@ -652,67 +705,149 @@ def recommendation_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any
         return _handle_error("recommendation_generation", e, event)
 
 
+
 def persistence_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for data persistence stage.
-    
+
+    Loads validated canonical records from S3 and persists them
+    to Aurora PostgreSQL using the db module.
+
     Expected event structure:
     {
         "run_id": str,
-        "output_artifact": str (S3 key with recommendations),
-        "total_indicators": int,
-        "total_validated": int,
-        "total_embedded": int,
-        "total_recommendations": int,
+        "output_artifact": str (S3 key with validation summary),
         "country": str,
         "state": str,
         "version_year": int
     }
-    
+
     Returns:
         {
             "status": "success" | "error",
             "stage_name": "data_persistence",
-            "output_artifact": str (database reference),
-            "total_indicators": int,
-            "total_validated": int,
-            "total_embedded": int,
-            "total_recommendations": int,
+            "records_persisted": int,
+            "errors": int,
             "country": str,
             "state": str,
             "version_year": int,
+            "run_id": str,
             "error": str (optional)
         }
     """
     try:
         logger.info(f"Starting data persistence: run_id={event.get('run_id')}, country={event.get('country')}")
-        
-        # In production, persist all data to Aurora PostgreSQL
-        # This is a placeholder
-        
-        output_key = f"db://pipeline_runs/{event.get('run_id')}"
-        
+
+        from .validator import deserialize_record
+        from .db import DatabaseConnection, persist_standard
+
+        # Load validation summary from S3
+        validation_key = event["output_artifact"]
+
+        try:
+            validation_summary = load_json_from_s3(Config.S3_PROCESSED_BUCKET, validation_key)
+            validated_keys = validation_summary["validated_records"]
+            logger.info(f"Loaded validation summary from S3: {validation_key}, {len(validated_keys)} records to persist")
+        except ClientError as e:
+            error_msg = f"Failed to load validation summary from S3: {validation_key}"
+            logger.error(f"{error_msg} - {str(e)}")
+            return _handle_error("data_persistence", Exception(error_msg), event)
+
+        if not validated_keys:
+            logger.warning("No validated records to persist")
+            return {
+                "status": "success",
+                "stage_name": "data_persistence",
+                "records_persisted": 0,
+                "errors": 0,
+                "country": event["country"],
+                "state": event["state"],
+                "version_year": event["version_year"],
+                "run_id": event.get("run_id")
+            }
+
+        # Initialize database connection pool
+        DatabaseConnection.initialize_pool()
+
+        records_persisted = 0
+        persist_errors = []
+
+        try:
+            for record_key in validated_keys:
+                try:
+                    # Load canonical JSON record from S3
+                    canonical_json = load_json_from_s3(Config.S3_PROCESSED_BUCKET, record_key)
+
+                    # Deserialize to NormalizedStandard
+                    standard = deserialize_record(canonical_json)
+
+                    # Extract document metadata for persist_standard
+                    document_meta = {
+                        "title": canonical_json["document"]["title"],
+                        "source_url": canonical_json["document"].get("source_url"),
+                        "age_band": canonical_json["document"].get("age_band", "3-4"),
+                        "publishing_agency": canonical_json["document"]["publishing_agency"],
+                    }
+
+                    # Persist to database
+                    persist_standard(standard, document_meta)
+                    records_persisted += 1
+
+                except ClientError as e:
+                    error_msg = f"Failed to load record from S3: {record_key}"
+                    logger.error(f"{error_msg} - {str(e)}")
+                    persist_errors.append({"record_key": record_key, "error": error_msg})
+                except Exception as e:
+                    logger.error(f"Failed to persist record {record_key}: {str(e)}")
+                    persist_errors.append({"record_key": record_key, "error": str(e)})
+
+            # Record the pipeline run itself
+            try:
+                with DatabaseConnection.get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO pipeline_runs (
+                                run_id, document_s3_key, country, state, version_year,
+                                status, total_indicators, total_validated, completed_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                            ON CONFLICT (run_id) DO UPDATE
+                            SET status = EXCLUDED.status,
+                                total_indicators = EXCLUDED.total_indicators,
+                                total_validated = EXCLUDED.total_validated,
+                                completed_at = NOW()
+                        """, (
+                            event.get("run_id"),
+                            validation_key,
+                            event["country"],
+                            event["state"],
+                            event["version_year"],
+                            "completed" if not persist_errors else "partial",
+                            len(validated_keys),
+                            records_persisted,
+                        ))
+                        conn.commit()
+            except Exception as e:
+                logger.error(f"Failed to record pipeline run: {str(e)}")
+
+        finally:
+            DatabaseConnection.close_pool()
+
         logger.info(
             f"Data persistence completed: "
-            f"indicators={event.get('total_indicators', 0)}, "
-            f"validated={event.get('total_validated', 0)}, "
-            f"embedded={event.get('total_embedded', 0)}, "
-            f"recommendations={event.get('total_recommendations', 0)}"
+            f"persisted={records_persisted}, errors={len(persist_errors)}"
         )
-        
+
         return {
             "status": "success",
             "stage_name": "data_persistence",
-            "output_artifact": output_key,
-            "total_indicators": event.get("total_indicators", 0),
-            "total_validated": event.get("total_validated", 0),
-            "total_embedded": event.get("total_embedded", 0),
-            "total_recommendations": event.get("total_recommendations", 0),
+            "records_persisted": records_persisted,
+            "errors": len(persist_errors),
             "country": event["country"],
             "state": event["state"],
             "version_year": event["version_year"],
             "run_id": event.get("run_id")
         }
-        
+
     except Exception as e:
         return _handle_error("data_persistence", e, event)
+

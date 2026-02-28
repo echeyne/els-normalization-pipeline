@@ -1,5 +1,6 @@
 """Data access layer for Aurora PostgreSQL with pgvector."""
 
+import json
 import os
 import psycopg2
 from psycopg2.extras import execute_values, RealDictCursor
@@ -7,6 +8,7 @@ from psycopg2.pool import SimpleConnectionPool
 from typing import List, Dict, Any, Optional
 from contextlib import contextmanager
 import logging
+import boto3
 
 from .models import NormalizedStandard, EmbeddingRecord, Recommendation
 
@@ -34,7 +36,18 @@ class DatabaseConnection:
             logger.warning("Connection pool already initialized")
             return
         
-        # Use environment variables as fallback
+        # Try Secrets Manager first (Lambda environment), then env vars, then defaults
+        secret_arn = os.getenv('DB_SECRET_ARN')
+        if secret_arn and not all([host, port, database, user, password]):
+            secret = cls._get_secret(secret_arn)
+            if secret:
+                host = host or secret.get('host')
+                port = port or int(secret.get('port', '5432'))
+                database = database or secret.get('dbname', 'els_pipeline')
+                user = user or secret.get('username')
+                password = password or secret.get('password')
+        
+        # Fall back to environment variables
         host = host or os.getenv('DB_HOST', 'localhost')
         port = port or int(os.getenv('DB_PORT', '5432'))
         database = database or os.getenv('DB_NAME', 'els_pipeline')
@@ -48,9 +61,23 @@ class DatabaseConnection:
             port=port,
             database=database,
             user=user,
-            password=password
+            password=password,
+            connect_timeout=10,
+            options='-c statement_timeout=30000'
         )
         logger.info(f"Database connection pool initialized: {host}:{port}/{database}")
+
+    @classmethod
+    def _get_secret(cls, secret_arn: str) -> Optional[Dict[str, str]]:
+        """Retrieve database credentials from Secrets Manager."""
+        try:
+            client = boto3.client('secretsmanager')
+            response = client.get_secret_value(SecretId=secret_arn)
+            return json.loads(response['SecretString'])
+        except Exception as e:
+            logger.warning(f"Failed to retrieve secret from Secrets Manager: {e}")
+            return None
+
     
     @classmethod
     @contextmanager

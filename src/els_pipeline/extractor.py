@@ -25,41 +25,14 @@ def extract_text(s3_key: str, s3_version_id: str) -> ExtractionResult:
     try:
         textract_client = boto3.client('textract', region_name=Config.AWS_REGION)
         
-        # Determine document size to choose sync vs async
-        s3_client = boto3.client('s3', region_name=Config.AWS_REGION)
-        
-        try:
-            head_params = {
-                'Bucket': Config.S3_RAW_BUCKET,
-                'Key': s3_key
-            }
-            if s3_version_id:
-                head_params['VersionId'] = s3_version_id
-            
-            response = s3_client.head_object(**head_params)
-            file_size_mb = response['ContentLength'] / (1024 * 1024)
-        except ClientError as e:
-            logger.error(f"Failed to get document metadata for {s3_key}: {e}")
-            return ExtractionResult(
-                document_s3_key=s3_key,
-                blocks=[],
-                total_pages=1,
-                status="error",
-                error=f"Failed to access document: {str(e)}"
-            )
-        
-        # Use sync for small single-page documents, async for multi-page or larger
-        # Note: Synchronous AnalyzeDocument only supports single-page documents
-        if file_size_mb < 5:
-            # Check if it's likely a single page by size heuristic
-            # Most single-page PDFs are under 500KB
-            if file_size_mb < 0.5:
-                textract_response = _extract_sync(textract_client, s3_key, s3_version_id)
-            else:
-                # Likely multi-page, use async
-                textract_response = _extract_async(textract_client, s3_key, s3_version_id)
-        else:
+        # Synchronous AnalyzeDocument only supports single-page documents (images).
+        # PDFs can be multi-page even when small, so always use async for them.
+        is_pdf = s3_key.lower().endswith('.pdf')
+        if is_pdf:
             textract_response = _extract_async(textract_client, s3_key, s3_version_id)
+        else:
+            # Images (JPEG, PNG, TIFF) are single-page, safe for sync
+            textract_response = _extract_sync(textract_client, s3_key, s3_version_id)
         
         if not textract_response:
             logger.error(f"Textract extraction failed for {s3_key}")

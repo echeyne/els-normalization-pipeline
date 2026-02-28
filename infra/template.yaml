@@ -325,6 +325,18 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref DatabaseSecret
+        - PolicyName: S3ProcessedBucketReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${ProcessedJsonBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ProcessedJsonBucket.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -473,6 +485,7 @@ Resources:
           - !Ref DatabaseSubnet2
       Environment:
         Variables:
+          ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
           DB_SECRET_ARN: !Ref DatabaseSecret
           DB_CLUSTER_ARN: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${DatabaseCluster}"
           ENVIRONMENT: !Ref EnvironmentName
@@ -571,6 +584,74 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "els-lambda-sg-${EnvironmentName}"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: ELS-Pipeline
+
+  # Route Table for private subnets (required for VPC Endpoint routing)
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DatabaseVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "els-private-rt-${EnvironmentName}"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # S3 Gateway VPC Endpoint - allows Lambda in VPC to reach S3 without NAT
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref DatabaseVPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+  # Secrets Manager Interface VPC Endpoint - allows Lambda in VPC to reach Secrets Manager
+  SecretsManagerVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref DatabaseVPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+
+  # Security Group for VPC Interface Endpoints
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "els-vpce-sg-${EnvironmentName}"
+      GroupDescription: Security group for VPC Interface Endpoints
+      VpcId: !Ref DatabaseVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Allow HTTPS from Lambda functions
+      Tags:
+        - Key: Name
+          Value: !Sub "els-vpce-sg-${EnvironmentName}"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -994,7 +1075,9 @@ Resources:
                   "output_artifact.$": "$.parsing_result.Payload.output_artifact",
                   "country.$": "$.country",
                   "state.$": "$.state",
-                  "version_year.$": "$.version_year"
+                  "version_year.$": "$.version_year",
+                  "source_url.$": "$.source_url",
+                  "publishing_agency.$": "$.publishing_agency"
                 }
               },
               "ResultPath": "$.validation_result",
