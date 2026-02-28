@@ -317,7 +317,7 @@ python scripts/test_validator_manual.py
 
 - ✅ JSON schema validation
 - ✅ Required field checking
-- ✅ Null subdomain/strand handling
+- ✅ Null strand/sub_strand handling
 - ✅ Standard_ID uniqueness
 - ✅ Serialization/deserialization round-trip
 - ✅ S3 storage of validated records
@@ -356,7 +356,7 @@ python scripts/test_embedder_manual.py
 
 **What's Tested:**
 
-- ✅ Input text construction (domain + subdomain + strand + indicator + age)
+- ✅ Input text construction (domain + strand + sub_strand + indicator + age)
 - ✅ Null level omission
 - ✅ Bedrock Titan Embed integration
 - ✅ Vector generation
@@ -444,7 +444,7 @@ python scripts/test_recommender_manual.py
 - ✅ Actionability checking (action verb + specific noun)
 - ✅ Retry logic for non-actionable responses
 - ✅ State scoping
-- ✅ Domain/subdomain aggregation
+- ✅ Domain/strand aggregation
 - ✅ Database persistence
 
 ---

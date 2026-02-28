@@ -26,8 +26,8 @@ CREATE TABLE domains (
     UNIQUE(document_id, code)
 );
 
--- Subdomains represent the second level of the hierarchy
-CREATE TABLE subdomains (
+-- Strands represent the second level of the hierarchy
+CREATE TABLE strands (
     id SERIAL PRIMARY KEY,
     domain_id INTEGER REFERENCES domains(id),
     code VARCHAR(30) NOT NULL,
@@ -35,13 +35,13 @@ CREATE TABLE subdomains (
     UNIQUE(domain_id, code)
 );
 
--- Strands represent the third level of the hierarchy
-CREATE TABLE strands (
+-- Sub-strands represent the third level of the hierarchy
+CREATE TABLE sub_strands (
     id SERIAL PRIMARY KEY,
-    subdomain_id INTEGER REFERENCES subdomains(id),
+    strand_id INTEGER REFERENCES strands(id),
     code VARCHAR(40) NOT NULL,
     name TEXT NOT NULL,
-    UNIQUE(subdomain_id, code)
+    UNIQUE(strand_id, code)
 );
 
 -- Indicators represent the lowest assessable unit (fourth level)
@@ -49,8 +49,8 @@ CREATE TABLE indicators (
     id SERIAL PRIMARY KEY,
     standard_id VARCHAR(100) UNIQUE NOT NULL,
     domain_id INTEGER REFERENCES domains(id) NOT NULL,
-    subdomain_id INTEGER REFERENCES subdomains(id),
     strand_id INTEGER REFERENCES strands(id),
+    sub_strand_id INTEGER REFERENCES sub_strands(id),
     code VARCHAR(50) NOT NULL,
     description TEXT NOT NULL,
     source_page INTEGER,

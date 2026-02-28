@@ -114,8 +114,8 @@ def test_persist_standard():
             state="TEST",
             version_year=2024,
             domain=HierarchyLevel(code="TST", name="Test Domain"),
-            subdomain=HierarchyLevel(code="TST.A", name="Test Subdomain"),
-            strand=None,
+            strand=HierarchyLevel(code="TST.A", name="Test Strand"),
+            sub_strand=None,
             indicator=HierarchyLevel(
                 code="TST.A.1",
                 name="Test Indicator",
@@ -155,7 +155,7 @@ def test_persist_embedding():
             vector=test_vector,
             embedding_model="amazon.titan-embed-text-v1",
             embedding_version="v1",
-            input_text="Test Domain – Test Subdomain – This is a test indicator for manual testing. Age 3-5.",
+            input_text="Test Domain – Test Strand – This is a test indicator for manual testing. Age 3-5.",
             created_at=datetime.now().isoformat()
         )
         
@@ -295,8 +295,8 @@ def cleanup_test_data():
                 cur.execute("DELETE FROM recommendations WHERE indicator_id LIKE 'US-TEST-%'")
                 cur.execute("DELETE FROM embeddings WHERE indicator_id LIKE 'US-TEST-%'")
                 cur.execute("DELETE FROM indicators WHERE standard_id LIKE 'US-TEST-%'")
-                cur.execute("DELETE FROM strands WHERE id IN (SELECT s.id FROM strands s JOIN subdomains sub ON s.subdomain_id = sub.id JOIN domains d ON sub.domain_id = d.id JOIN documents doc ON d.document_id = doc.id WHERE doc.state = 'TEST')")
-                cur.execute("DELETE FROM subdomains WHERE id IN (SELECT sub.id FROM subdomains sub JOIN domains d ON sub.domain_id = d.id JOIN documents doc ON d.document_id = doc.id WHERE doc.state = 'TEST')")
+                cur.execute("DELETE FROM sub_strands WHERE id IN (SELECT ss.id FROM sub_strands ss JOIN strands str ON ss.strand_id = str.id JOIN domains d ON str.domain_id = d.id JOIN documents doc ON d.document_id = doc.id WHERE doc.state = 'TEST')")
+                cur.execute("DELETE FROM strands WHERE id IN (SELECT str.id FROM strands str JOIN domains d ON str.domain_id = d.id JOIN documents doc ON d.document_id = doc.id WHERE doc.state = 'TEST')")
                 cur.execute("DELETE FROM domains WHERE id IN (SELECT d.id FROM domains d JOIN documents doc ON d.document_id = doc.id WHERE doc.state = 'TEST')")
                 cur.execute("DELETE FROM documents WHERE state = 'TEST'")
                 

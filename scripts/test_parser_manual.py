@@ -36,10 +36,10 @@ def print_standard(standard, index):
     print(f"    State: {standard.state}")
     print(f"    Year: {standard.version_year}")
     print(f"    Domain: {standard.domain.code} - {standard.domain.name}")
-    if standard.subdomain:
-        print(f"    Subdomain: {standard.subdomain.code} - {standard.subdomain.name}")
     if standard.strand:
         print(f"    Strand: {standard.strand.code} - {standard.strand.name}")
+    if standard.sub_strand:
+        print(f"    Sub-strand: {standard.sub_strand.code} - {standard.sub_strand.name}")
     print(f"    Indicator: {standard.indicator.code} - {standard.indicator.name}")
     print(f"    Description: {standard.indicator.description}")
     print(f"    Source Page: {standard.source_page}")
@@ -121,13 +121,13 @@ def test_texas_standards():
             needs_review=False,
         ),
         DetectedElement(
-            level=HierarchyLevelEnum.SUBDOMAIN,
+            level=HierarchyLevelEnum.STRAND,
             code="I.A",
             title="Self-Concept",
-            description="Self-concept subdomain",
+            description="Self-concept strand",
             confidence=0.93,
             source_page=11,
-            source_text="I.A subdomain text",
+            source_text="I.A strand text",
             needs_review=False,
         ),
         DetectedElement(
@@ -161,16 +161,16 @@ def test_texas_standards():
     for idx, standard in enumerate(result.standards):
         print_standard(standard, idx)
     
-    # Verify depth normalization (3 levels = Domain + Subdomain + Indicator, no Strand)
+    # Verify depth normalization (3 levels = Domain + Strand + Indicator, no Sub-strand)
     print("\n  Depth Normalization Verification (3 levels):")
     for standard in result.standards:
         has_domain = standard.domain is not None
-        has_subdomain = standard.subdomain is not None
-        has_strand = standard.strand is None
+        has_strand = standard.strand is not None
+        has_sub_strand = standard.sub_strand is None
         has_indicator = standard.indicator is not None
         
-        all_correct = has_domain and has_subdomain and has_strand and has_indicator
-        print(f"    {standard.standard_id}: Domain={has_domain}, Subdomain={has_subdomain}, Strand=None={has_strand}, Indicator={has_indicator} - {'✓ PASS' if all_correct else '✗ FAIL'}")
+        all_correct = has_domain and has_strand and has_sub_strand and has_indicator
+        print(f"    {standard.standard_id}: Domain={has_domain}, Strand={has_strand}, Sub-strand=None={has_sub_strand}, Indicator={has_indicator} - {'✓ PASS' if all_correct else '✗ FAIL'}")
 
 
 def test_florida_standards():
@@ -219,16 +219,16 @@ def test_florida_standards():
     for idx, standard in enumerate(result.standards):
         print_standard(standard, idx)
     
-    # Verify depth normalization (2 levels = Domain + Indicator, no Subdomain or Strand)
+    # Verify depth normalization (2 levels = Domain + Indicator, no Strand or Sub-strand)
     print("\n  Depth Normalization Verification (2 levels):")
     for standard in result.standards:
         has_domain = standard.domain is not None
-        has_subdomain = standard.subdomain is None
         has_strand = standard.strand is None
+        has_sub_strand = standard.sub_strand is None
         has_indicator = standard.indicator is not None
         
-        all_correct = has_domain and has_subdomain and has_strand and has_indicator
-        print(f"    {standard.standard_id}: Domain={has_domain}, Subdomain=None={has_subdomain}, Strand=None={has_strand}, Indicator={has_indicator} - {'✓ PASS' if all_correct else '✗ FAIL'}")
+        all_correct = has_domain and has_strand and has_sub_strand and has_indicator
+        print(f"    {standard.standard_id}: Domain={has_domain}, Strand=None={has_strand}, Sub-strand=None={has_sub_strand}, Indicator={has_indicator} - {'✓ PASS' if all_correct else '✗ FAIL'}")
 
 
 def test_orphan_detection():

@@ -192,8 +192,8 @@ def test_complete_core_pipeline_with_mocked_services():
                         name="Language and Literacy Development",
                         description=None
                     ),
-                    subdomain=None,
                     strand=None,
+                    sub_strand=None,
                     indicator=HierarchyLevel(
                         code="LLD.1",
                         name="",
@@ -244,8 +244,8 @@ def test_complete_core_pipeline_with_mocked_services():
                     "code": "LLD",
                     "name": "Language and Literacy Development"
                 },
-                "subdomain": None,
                 "strand": None,
+                "sub_strand": None,
                 "indicator": {
                     "code": "LLD.1",
                     "description": "Child demonstrates understanding of language"

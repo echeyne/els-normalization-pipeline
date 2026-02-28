@@ -151,7 +151,7 @@ Aurora Serverless PostgreSQL cluster with pgvector extension:
 
 - Database: `els_pipeline`
 - Extension: `pgvector` for embedding storage
-- Tables: documents, domains, subdomains, strands, indicators, embeddings, recommendations
+- Tables: documents, domains, strands, sub_strands, indicators, embeddings, recommendations
 - All tables include `country` column for multi-country support
 
 ## Deployment

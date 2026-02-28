@@ -54,12 +54,12 @@ class TestDepthNormalization:
             assert standard.domain.code == "LLD"
             assert standard.indicator is not None
             
-            # Subdomain and strand must be null
-            assert standard.subdomain is None
+            # Strand and sub_strand must be null
             assert standard.strand is None
+            assert standard.sub_strand is None
     
     def test_three_level_hierarchy(self):
-        """Test parsing a 3-level hierarchy (Domain + Subdomain + Indicator)."""
+        """Test parsing a 3-level hierarchy (Domain + Strand + Indicator)."""
         elements = [
             DetectedElement(
                 level=HierarchyLevelEnum.DOMAIN,
@@ -72,13 +72,13 @@ class TestDepthNormalization:
                 needs_review=False,
             ),
             DetectedElement(
-                level=HierarchyLevelEnum.SUBDOMAIN,
+                level=HierarchyLevelEnum.STRAND,
                 code="LLD.A",
                 title="Listening and Speaking",
-                description="Listening and speaking subdomain",
+                description="Listening and speaking strand",
                 confidence=0.93,
                 source_page=2,
-                source_text="LLD.A subdomain text",
+                source_text="LLD.A strand text",
                 needs_review=False,
             ),
             DetectedElement(
@@ -109,18 +109,18 @@ class TestDepthNormalization:
         assert len(result.standards) == 2
         
         for standard in result.standards:
-            # Domain, subdomain, and indicator must be populated
+            # Domain, strand, and indicator must be populated
             assert standard.domain is not None
             assert standard.domain.code == "LLD"
-            assert standard.subdomain is not None
-            assert standard.subdomain.code == "LLD.A"
+            assert standard.strand is not None
+            assert standard.strand.code == "LLD.A"
             assert standard.indicator is not None
             
-            # Strand must be null
-            assert standard.strand is None
+            # Sub_strand must be null
+            assert standard.sub_strand is None
     
     def test_four_level_hierarchy(self):
-        """Test parsing a 4-level hierarchy (Domain + Subdomain + Strand + Indicator)."""
+        """Test parsing a 4-level hierarchy (Domain + Strand + Sub-strand + Indicator)."""
         elements = [
             DetectedElement(
                 level=HierarchyLevelEnum.DOMAIN,
@@ -133,23 +133,23 @@ class TestDepthNormalization:
                 needs_review=False,
             ),
             DetectedElement(
-                level=HierarchyLevelEnum.SUBDOMAIN,
+                level=HierarchyLevelEnum.STRAND,
                 code="LLD.A",
                 title="Listening and Speaking",
-                description="Listening and speaking subdomain",
+                description="Listening and speaking strand",
                 confidence=0.93,
                 source_page=2,
-                source_text="LLD.A subdomain text",
+                source_text="LLD.A strand text",
                 needs_review=False,
             ),
             DetectedElement(
-                level=HierarchyLevelEnum.STRAND,
+                level=HierarchyLevelEnum.SUB_STRAND,
                 code="LLD.A.1",
                 title="Comprehension",
-                description="Comprehension strand",
+                description="Comprehension sub-strand",
                 confidence=0.92,
                 source_page=3,
-                source_text="LLD.A.1 strand text",
+                source_text="LLD.A.1 sub-strand text",
                 needs_review=False,
             ),
             DetectedElement(
@@ -183,10 +183,10 @@ class TestDepthNormalization:
             # All four levels must be populated
             assert standard.domain is not None
             assert standard.domain.code == "LLD"
-            assert standard.subdomain is not None
-            assert standard.subdomain.code == "LLD.A"
             assert standard.strand is not None
-            assert standard.strand.code == "LLD.A.1"
+            assert standard.strand.code == "LLD.A"
+            assert standard.sub_strand is not None
+            assert standard.sub_strand.code == "LLD.A.1"
             assert standard.indicator is not None
 
 

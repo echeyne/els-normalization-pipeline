@@ -56,12 +56,12 @@ def create_sample_standard():
             name="Language and Literacy Development",
             description=None,
         ),
-        subdomain=HierarchyLevel(
+        strand=HierarchyLevel(
             code="LLD.A",
             name="Listening and Speaking",
             description=None,
         ),
-        strand=HierarchyLevel(
+        sub_strand=HierarchyLevel(
             code="LLD.A.1",
             name="Comprehension",
             description=None,
@@ -97,8 +97,8 @@ def test_serialization():
     print(f"  Standard ID: {standard.standard_id}")
     print(f"  State: {standard.state}")
     print(f"  Domain: {standard.domain.code} - {standard.domain.name}")
-    print(f"  Subdomain: {standard.subdomain.code} - {standard.subdomain.name}")
     print(f"  Strand: {standard.strand.code} - {standard.strand.name}")
+    print(f"  Sub-strand: {standard.sub_strand.code} - {standard.sub_strand.name}")
     print(f"  Indicator: {standard.indicator.code}")
     print(f"  Description: {standard.indicator.description}")
     
@@ -194,8 +194,8 @@ def test_deserialization(canonical):
     print(f"  Standard ID: {deserialized.standard_id}")
     print(f"  State: {deserialized.state}")
     print(f"  Domain: {deserialized.domain.code} - {deserialized.domain.name}")
-    print(f"  Subdomain: {deserialized.subdomain.code if deserialized.subdomain else 'None'}")
     print(f"  Strand: {deserialized.strand.code if deserialized.strand else 'None'}")
+    print(f"  Sub-strand: {deserialized.sub_strand.code if deserialized.sub_strand else 'None'}")
     print(f"  Indicator: {deserialized.indicator.code}")
     
     print("\n  ✓ Deserialization successful!")

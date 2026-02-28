@@ -61,7 +61,7 @@ def mock_bedrock_response():
                         "source_text": "Language and Literacy Development"
                     },
                     {
-                        "level": "subdomain",
+                        "level": "strand",
                         "code": "LLD.A",
                         "title": "Listening and Speaking",
                         "description": "Listening and speaking skills",

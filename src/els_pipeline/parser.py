@@ -37,9 +37,9 @@ def normalize_hierarchy_mapping(depth: int) -> Dict[int, Optional[HierarchyLevel
         Dictionary mapping level index to canonical HierarchyLevelEnum
         
     Mapping rules:
-    - 2 levels: Domain (0), Indicator (1), Subdomain=None, Strand=None
-    - 3 levels: Domain (0), Subdomain (1), Indicator (2), Strand=None
-    - 4+ levels: Domain (0), Subdomain (1), Strand (2), Indicator (3+)
+    - 2 levels: Domain (0), Indicator (1), Strand=None, Sub_strand=None
+    - 3 levels: Domain (0), Strand (1), Indicator (2), Sub_strand=None
+    - 4+ levels: Domain (0), Strand (1), Sub_strand (2), Indicator (3+)
     """
     if depth == 2:
         return {
@@ -49,14 +49,14 @@ def normalize_hierarchy_mapping(depth: int) -> Dict[int, Optional[HierarchyLevel
     elif depth == 3:
         return {
             0: HierarchyLevelEnum.DOMAIN,
-            1: HierarchyLevelEnum.SUBDOMAIN,
+            1: HierarchyLevelEnum.STRAND,
             2: HierarchyLevelEnum.INDICATOR,
         }
     else:  # 4 or more levels
         return {
             0: HierarchyLevelEnum.DOMAIN,
-            1: HierarchyLevelEnum.SUBDOMAIN,
-            2: HierarchyLevelEnum.STRAND,
+            1: HierarchyLevelEnum.STRAND,
+            2: HierarchyLevelEnum.SUB_STRAND,
             3: HierarchyLevelEnum.INDICATOR,
         }
 
@@ -145,40 +145,40 @@ def build_hierarchy_tree(
     
     # Build tree structure
     domains = by_level.get(HierarchyLevelEnum.DOMAIN, [])
-    subdomains = by_level.get(HierarchyLevelEnum.SUBDOMAIN, [])
     strands = by_level.get(HierarchyLevelEnum.STRAND, [])
+    sub_strands = by_level.get(HierarchyLevelEnum.SUB_STRAND, [])
     indicators = by_level.get(HierarchyLevelEnum.INDICATOR, [])
     
     for domain in domains:
         tree[domain.code] = {
             "element": domain,
-            "subdomains": {},
+            "strands": {},
         }
         
-        # Match subdomains to this domain (by code prefix or simple matching)
-        for subdomain in subdomains:
-            if subdomain.code.startswith(domain.code):
-                tree[domain.code]["subdomains"][subdomain.code] = {
-                    "element": subdomain,
-                    "strands": {},
+        # Match strands to this domain (by code prefix or simple matching)
+        for strand in strands:
+            if strand.code.startswith(domain.code):
+                tree[domain.code]["strands"][strand.code] = {
+                    "element": strand,
+                    "sub_strands": {},
                 }
                 
-                # Match strands to this subdomain
-                for strand in strands:
-                    if strand.code.startswith(subdomain.code):
-                        tree[domain.code]["subdomains"][subdomain.code]["strands"][
-                            strand.code
+                # Match sub_strands to this strand
+                for sub_strand in sub_strands:
+                    if sub_strand.code.startswith(strand.code):
+                        tree[domain.code]["strands"][strand.code]["sub_strands"][
+                            sub_strand.code
                         ] = {
-                            "element": strand,
+                            "element": sub_strand,
                             "indicators": [],
                         }
                         
-                        # Match indicators to this strand
+                        # Match indicators to this sub_strand
                         for indicator in indicators:
-                            if indicator.code.startswith(strand.code):
-                                tree[domain.code]["subdomains"][subdomain.code][
-                                    "strands"
-                                ][strand.code]["indicators"].append(indicator)
+                            if indicator.code.startswith(sub_strand.code):
+                                tree[domain.code]["strands"][strand.code][
+                                    "sub_strands"
+                                ][sub_strand.code]["indicators"].append(indicator)
     
     return tree
 
@@ -216,41 +216,41 @@ def extract_standards_from_tree(
         if depth == 2:
             # Domain + Indicator only
             # Find indicators that belong to this domain
-            # Since we don't have subdomains/strands, indicators should be direct children
+            # Since we don't have strands/sub_strands, indicators should be direct children
             # We need to handle this case differently
             pass
         elif depth == 3:
-            # Domain + Subdomain + Indicator
-            for subdomain_code, subdomain_data in domain_data["subdomains"].items():
-                subdomain_element = subdomain_data["element"]
-                subdomain_level = HierarchyLevel(
-                    code=subdomain_element.code,
-                    name=subdomain_element.title,
+            # Domain + Strand + Indicator
+            for strand_code, strand_data in domain_data["strands"].items():
+                strand_element = strand_data["element"]
+                strand_level = HierarchyLevel(
+                    code=strand_element.code,
+                    name=strand_element.title,
                     description=None,
                 )
                 
-                # Find indicators for this subdomain
+                # Find indicators for this strand
                 # (indicators would be stored differently for depth 3)
                 pass
         else:
-            # Domain + Subdomain + Strand + Indicator
-            for subdomain_code, subdomain_data in domain_data["subdomains"].items():
-                subdomain_element = subdomain_data["element"]
-                subdomain_level = HierarchyLevel(
-                    code=subdomain_element.code,
-                    name=subdomain_element.title,
+            # Domain + Strand + Sub_strand + Indicator
+            for strand_code, strand_data in domain_data["strands"].items():
+                strand_element = strand_data["element"]
+                strand_level = HierarchyLevel(
+                    code=strand_element.code,
+                    name=strand_element.title,
                     description=None,
                 )
                 
-                for strand_code, strand_data in subdomain_data["strands"].items():
-                    strand_element = strand_data["element"]
-                    strand_level = HierarchyLevel(
-                        code=strand_element.code,
-                        name=strand_element.title,
+                for sub_strand_code, sub_strand_data in strand_data["sub_strands"].items():
+                    sub_strand_element = sub_strand_data["element"]
+                    sub_strand_level = HierarchyLevel(
+                        code=sub_strand_element.code,
+                        name=sub_strand_element.title,
                         description=None,
                     )
                     
-                    for indicator_element in strand_data["indicators"]:
+                    for indicator_element in sub_strand_data["indicators"]:
                         indicator_level = HierarchyLevel(
                             code=indicator_element.code,
                             name=indicator_element.title,
@@ -267,8 +267,8 @@ def extract_standards_from_tree(
                             state=state,
                             version_year=version_year,
                             domain=domain_level,
-                            subdomain=subdomain_level,
                             strand=strand_level,
+                            sub_strand=sub_strand_level,
                             indicator=indicator_level,
                             source_page=indicator_element.source_page,
                             source_text=indicator_element.source_text,
@@ -328,8 +328,8 @@ def parse_hierarchy(
         
         # Extract components
         domains = by_canonical.get(HierarchyLevelEnum.DOMAIN, [])
-        subdomains = by_canonical.get(HierarchyLevelEnum.SUBDOMAIN, [])
         strands = by_canonical.get(HierarchyLevelEnum.STRAND, [])
+        sub_strands = by_canonical.get(HierarchyLevelEnum.SUB_STRAND, [])
         indicators = by_canonical.get(HierarchyLevelEnum.INDICATOR, [])
         
         if not domains:
@@ -357,21 +357,21 @@ def parse_hierarchy(
         # Build a context-aware hierarchy using document order
         # Track the current parent at each level as we iterate through elements
         current_domain = None
-        current_subdomain = None
         current_strand = None
+        current_sub_strand = None
         
         # Process elements in document order to build hierarchy context
         # Use the original elements_with_canonical list which preserves order
         for element, canonical_level in elements_with_canonical:
             if canonical_level == HierarchyLevelEnum.DOMAIN:
                 current_domain = element
-                current_subdomain = None
                 current_strand = None
-            elif canonical_level == HierarchyLevelEnum.SUBDOMAIN:
-                current_subdomain = element
-                current_strand = None  # Reset strand when subdomain changes
+                current_sub_strand = None
             elif canonical_level == HierarchyLevelEnum.STRAND:
                 current_strand = element
+                current_sub_strand = None  # Reset sub_strand when strand changes
+            elif canonical_level == HierarchyLevelEnum.SUB_STRAND:
+                current_sub_strand = element
             elif canonical_level == HierarchyLevelEnum.INDICATOR:
                 # Build standard using current context
                 if not current_domain:
@@ -383,23 +383,23 @@ def parse_hierarchy(
                     orphaned.append(element)
                     continue
                 
-                # For depth 3+, require subdomain
-                if depth >= 3 and not current_subdomain:
+                # For depth 3+, require strand
+                if depth >= 3 and not current_strand:
                     orphaned.append(element)
                     continue
                 
-                # For depth 3+, check if indicator code matches subdomain prefix
-                if depth >= 3 and current_subdomain and not element.code.startswith(current_subdomain.code):
+                # For depth 3+, check if indicator code matches strand prefix
+                if depth >= 3 and current_strand and not element.code.startswith(current_strand.code):
                     orphaned.append(element)
                     continue
                 
-                # For depth 4, require strand
-                if depth >= 4 and not current_strand:
+                # For depth 4, require sub_strand
+                if depth >= 4 and not current_sub_strand:
                     orphaned.append(element)
                     continue
                 
-                # For depth 4, check if indicator code matches strand prefix
-                if depth >= 4 and current_strand and not element.code.startswith(current_strand.code):
+                # For depth 4, check if indicator code matches sub_strand prefix
+                if depth >= 4 and current_sub_strand and not element.code.startswith(current_sub_strand.code):
                     orphaned.append(element)
                     continue
                 
@@ -410,19 +410,19 @@ def parse_hierarchy(
                     description=None,
                 )
                 
-                subdomain_level = None
-                if current_subdomain:
-                    subdomain_level = HierarchyLevel(
-                        code=current_subdomain.code,
-                        name=current_subdomain.title,
-                        description=None,
-                    )
-                
                 strand_level = None
                 if current_strand:
                     strand_level = HierarchyLevel(
                         code=current_strand.code,
                         name=current_strand.title,
+                        description=None,
+                    )
+                
+                sub_strand_level = None
+                if current_sub_strand:
+                    sub_strand_level = HierarchyLevel(
+                        code=current_sub_strand.code,
+                        name=current_sub_strand.title,
                         description=None,
                     )
                 
@@ -444,8 +444,8 @@ def parse_hierarchy(
                     state=state,
                     version_year=version_year,
                     domain=domain_level,
-                    subdomain=subdomain_level,
                     strand=strand_level,
+                    sub_strand=sub_strand_level,
                     indicator=indicator_level,
                     source_page=element.source_page,
                     source_text=element.source_text,

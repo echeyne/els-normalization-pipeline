@@ -13,8 +13,8 @@ from src.els_pipeline.config import Config
 # Strategy for generating valid hierarchy levels
 hierarchy_level_strategy = st.sampled_from([
     HierarchyLevelEnum.DOMAIN,
-    HierarchyLevelEnum.SUBDOMAIN,
     HierarchyLevelEnum.STRAND,
+    HierarchyLevelEnum.SUB_STRAND,
     HierarchyLevelEnum.INDICATOR
 ])
 
@@ -98,8 +98,8 @@ def test_property_7_detected_element_field_validity(elements: list):
     """
     valid_levels = {
         HierarchyLevelEnum.DOMAIN,
-        HierarchyLevelEnum.SUBDOMAIN,
         HierarchyLevelEnum.STRAND,
+        HierarchyLevelEnum.SUB_STRAND,
         HierarchyLevelEnum.INDICATOR
     }
     

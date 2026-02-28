@@ -40,8 +40,8 @@ def sample_standard():
         state="CA",
         version_year=2021,
         domain=HierarchyLevel(code="LLD", name="Language and Literacy Development"),
-        subdomain=HierarchyLevel(code="LLD.A", name="Listening and Speaking"),
-        strand=None,
+        strand=HierarchyLevel(code="LLD.A", name="Listening and Speaking"),
+        sub_strand=None,
         indicator=HierarchyLevel(
             code="LLD.A.1.a",
             name="Indicator 1.2",
@@ -127,7 +127,7 @@ class TestPersistStandard:
     def test_persist_standard_with_all_levels(self, mock_connection, sample_standard):
         """Test persisting a standard with all hierarchy levels."""
         conn, cursor = mock_connection
-        cursor.fetchone.side_effect = [(1,), (2,), (3,), (4,)]  # document_id, domain_id, subdomain_id, strand_id
+        cursor.fetchone.side_effect = [(1,), (2,), (3,), (4,)]  # document_id, domain_id, strand_id, sub_strand_id
         
         with patch.object(DatabaseConnection, 'get_connection') as mock_get_conn:
             mock_get_conn.return_value.__enter__.return_value = conn
@@ -150,8 +150,8 @@ class TestPersistStandard:
             
             conn.commit.assert_called_once()
     
-    def test_persist_standard_without_subdomain_strand(self, mock_connection):
-        """Test persisting a standard without subdomain and strand."""
+    def test_persist_standard_without_strand_sub_strand(self, mock_connection):
+        """Test persisting a standard without strand and sub_strand."""
         conn, cursor = mock_connection
         cursor.fetchone.side_effect = [(1,), (2,)]  # document_id, domain_id
         
@@ -161,8 +161,8 @@ class TestPersistStandard:
             state="TX",
             version_year=2022,
             domain=HierarchyLevel(code="MTH", name="Mathematics"),
-            subdomain=None,
             strand=None,
+            sub_strand=None,
             indicator=HierarchyLevel(code="MTH.1", name="Indicator 1", description="Count to 10"),
             source_page=1,
             source_text="Sample"
@@ -180,7 +180,7 @@ class TestPersistStandard:
             
             persist_standard(standard, document_meta)
             
-            # Should only insert document, domain, and indicator (no subdomain/strand)
+            # Should only insert document, domain, and indicator (no strand/sub_strand)
             conn.commit.assert_called_once()
 
 

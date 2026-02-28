@@ -58,7 +58,7 @@ Your AWS user/role must have permissions to:
 
 Ensure you have access to the following Bedrock models in your AWS region:
 
-- `anthropic.claude-sonnet-4-5-20250929-v1:0` (for structure detection and recommendations)
+- `us.anthropic.claude-sonnet-4-6` (for structure detection and recommendations)
 - `amazon.titan-embed-text-v2:0` (for embeddings)
 
 To request model access:
@@ -107,8 +107,8 @@ AWS_REGION=us-east-1
 ENVIRONMENT=dev  # or staging, prod
 
 # Bedrock Model IDs
-BEDROCK_STRUCTURE_MODEL=anthropic.claude-sonnet-4-5-20250929-v1:0
-BEDROCK_RECOMMENDATION_MODEL=anthropic.claude-sonnet-4-5-20250929-v1:0
+BEDROCK_STRUCTURE_MODEL=us.anthropic.claude-sonnet-4-6
+BEDROCK_RECOMMENDATION_MODEL=us.anthropic.claude-sonnet-4-6
 BEDROCK_EMBEDDING_MODEL=amazon.titan-embed-text-v2:0
 
 # Confidence Threshold
@@ -280,7 +280,7 @@ psql -h <DatabaseClusterEndpoint> \
      -c "\dt"
 ```
 
-Expected: List of tables (documents, domains, subdomains, strands, indicators, embeddings, recommendations, pipeline_runs, pipeline_stages).
+Expected: List of tables (documents, domains, strands, sub_strands, indicators, embeddings, recommendations, pipeline_runs, pipeline_stages).
 
 ---
 
@@ -477,8 +477,8 @@ Contains parsed indicators with full hierarchy paths:
   "indicators": [
     {
       "domain": "Social-Emotional Development",
-      "subdomain": "Self-Regulation",
-      "strand": "Emotional Regulation",
+      "strand": "Self-Regulation",
+      "sub_strand": "Emotional Regulation",
       "code": "SE-1.1",
       "description": "Child demonstrates ability to manage emotions"
     }

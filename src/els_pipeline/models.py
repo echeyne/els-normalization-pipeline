@@ -9,8 +9,8 @@ import re
 class HierarchyLevelEnum(str, Enum):
     """Valid hierarchy levels."""
     DOMAIN = "domain"
-    SUBDOMAIN = "subdomain"
     STRAND = "strand"
+    SUB_STRAND = "sub_strand"
     INDICATOR = "indicator"
 
 
@@ -120,8 +120,8 @@ class NormalizedStandard(BaseModel):
     state: str
     version_year: int
     domain: HierarchyLevel
-    subdomain: Optional[HierarchyLevel] = None
     strand: Optional[HierarchyLevel] = None
+    sub_strand: Optional[HierarchyLevel] = None
     indicator: HierarchyLevel
     source_page: int = Field(gt=0)
     source_text: str
@@ -248,7 +248,7 @@ class RecommendationRequest(BaseModel):
     state: str
     indicator_ids: Optional[List[str]] = None
     domain_code: Optional[str] = None
-    subdomain_code: Optional[str] = None
+    strand_code: Optional[str] = None
     age_band: str
     
     @field_validator('country')

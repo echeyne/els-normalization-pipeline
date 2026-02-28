@@ -99,7 +99,7 @@ def two_level_hierarchy(draw):
 
 @st.composite
 def three_level_hierarchy(draw):
-    """Generate a 3-level hierarchy (Domain + Subdomain + Indicator)."""
+    """Generate a 3-level hierarchy (Domain + Strand + Indicator)."""
     num_domains = draw(st.integers(min_value=1, max_value=3))
     elements = []
     
@@ -107,21 +107,21 @@ def three_level_hierarchy(draw):
         domain = draw(detected_element(level=HierarchyLevelEnum.DOMAIN))
         elements.append(domain)
         
-        # Add subdomains for this domain
-        num_subdomains = draw(st.integers(min_value=1, max_value=3))
-        for _ in range(num_subdomains):
-            subdomain = draw(detected_element(
-                level=HierarchyLevelEnum.SUBDOMAIN,
+        # Add strands for this domain
+        num_strands = draw(st.integers(min_value=1, max_value=3))
+        for _ in range(num_strands):
+            strand = draw(detected_element(
+                level=HierarchyLevelEnum.STRAND,
                 code_prefix=domain.code
             ))
-            elements.append(subdomain)
+            elements.append(strand)
             
-            # Add indicators for this subdomain
+            # Add indicators for this strand
             num_indicators = draw(st.integers(min_value=1, max_value=5))
             for _ in range(num_indicators):
                 indicator = draw(detected_element(
                     level=HierarchyLevelEnum.INDICATOR,
-                    code_prefix=subdomain.code
+                    code_prefix=strand.code
                 ))
                 elements.append(indicator)
     
@@ -130,7 +130,7 @@ def three_level_hierarchy(draw):
 
 @st.composite
 def four_level_hierarchy(draw):
-    """Generate a 4-level hierarchy (Domain + Subdomain + Strand + Indicator)."""
+    """Generate a 4-level hierarchy (Domain + Strand + Sub-strand + Indicator)."""
     num_domains = draw(st.integers(min_value=1, max_value=2))
     elements = []
     
@@ -138,30 +138,30 @@ def four_level_hierarchy(draw):
         domain = draw(detected_element(level=HierarchyLevelEnum.DOMAIN))
         elements.append(domain)
         
-        # Add subdomains for this domain
-        num_subdomains = draw(st.integers(min_value=1, max_value=2))
-        for _ in range(num_subdomains):
-            subdomain = draw(detected_element(
-                level=HierarchyLevelEnum.SUBDOMAIN,
+        # Add strands for this domain
+        num_strands = draw(st.integers(min_value=1, max_value=2))
+        for _ in range(num_strands):
+            strand = draw(detected_element(
+                level=HierarchyLevelEnum.STRAND,
                 code_prefix=domain.code
             ))
-            elements.append(subdomain)
+            elements.append(strand)
             
-            # Add strands for this subdomain
-            num_strands = draw(st.integers(min_value=1, max_value=2))
-            for _ in range(num_strands):
-                strand = draw(detected_element(
-                    level=HierarchyLevelEnum.STRAND,
-                    code_prefix=subdomain.code
+            # Add sub-strands for this strand
+            num_sub_strands = draw(st.integers(min_value=1, max_value=2))
+            for _ in range(num_sub_strands):
+                sub_strand = draw(detected_element(
+                    level=HierarchyLevelEnum.SUB_STRAND,
+                    code_prefix=strand.code
                 ))
-                elements.append(strand)
+                elements.append(sub_strand)
                 
-                # Add indicators for this strand
+                # Add indicators for this sub-strand
                 num_indicators = draw(st.integers(min_value=1, max_value=3))
                 for _ in range(num_indicators):
                     indicator = draw(detected_element(
                         level=HierarchyLevelEnum.INDICATOR,
-                        code_prefix=strand.code
+                        code_prefix=sub_strand.code
                     ))
                     elements.append(indicator)
     
@@ -185,7 +185,7 @@ def test_property_9_canonical_level_normalization(elements, country, state, year
     
     For any set of detected elements with arbitrary level labels,
     the Hierarchy Parser output SHALL contain only levels from the set
-    {domain, subdomain, strand, indicator}.
+    {domain, strand, sub_strand, indicator}.
     
     Validates: Requirements 4.1
     """
@@ -194,8 +194,8 @@ def test_property_9_canonical_level_normalization(elements, country, state, year
     # Check that all standards have only canonical levels
     valid_levels = {
         HierarchyLevelEnum.DOMAIN,
-        HierarchyLevelEnum.SUBDOMAIN,
         HierarchyLevelEnum.STRAND,
+        HierarchyLevelEnum.SUB_STRAND,
         HierarchyLevelEnum.INDICATOR,
     }
     
@@ -206,7 +206,7 @@ def test_property_9_canonical_level_normalization(elements, country, state, year
         # Indicator is always present
         assert standard.indicator is not None
         
-        # Subdomain and strand may be None, but if present, they're valid
+        # Strand and sub_strand may be None, but if present, they're valid
         # All levels are from the canonical set (implicitly validated by the model)
 
 
@@ -223,7 +223,7 @@ def test_property_10_depth_based_hierarchy_mapping_2_levels(elements, country, s
     
     For any set of detected elements with 2 distinct hierarchy levels:
     output standards SHALL have domain and indicator populated,
-    subdomain and strand null.
+    strand and sub_strand null.
     
     Validates: Requirements 4.2, 4.3, 4.4
     """
@@ -234,9 +234,9 @@ def test_property_10_depth_based_hierarchy_mapping_2_levels(elements, country, s
         assert standard.domain is not None
         assert standard.indicator is not None
         
-        # Subdomain and strand must be null
-        assert standard.subdomain is None
+        # Strand and sub_strand must be null
         assert standard.strand is None
+        assert standard.sub_strand is None
 
 
 @given(
@@ -250,21 +250,21 @@ def test_property_10_depth_based_hierarchy_mapping_3_levels(elements, country, s
     Property 10: Depth-Based Hierarchy Mapping (3 levels)
     
     For any set of detected elements with 3 distinct hierarchy levels:
-    output standards SHALL have domain, subdomain, and indicator populated,
-    strand null.
+    output standards SHALL have domain, strand, and indicator populated,
+    sub_strand null.
     
     Validates: Requirements 4.2, 4.3, 4.4
     """
     result = parse_hierarchy(elements, country, state, year)
     
     for standard in result.standards:
-        # Domain, subdomain, and indicator must be populated
+        # Domain, strand, and indicator must be populated
         assert standard.domain is not None
-        assert standard.subdomain is not None
+        assert standard.strand is not None
         assert standard.indicator is not None
         
-        # Strand must be null
-        assert standard.strand is None
+        # Sub_strand must be null
+        assert standard.sub_strand is None
 
 
 @given(
@@ -287,8 +287,8 @@ def test_property_10_depth_based_hierarchy_mapping_4_levels(elements, country, s
     for standard in result.standards:
         # All four levels must be populated
         assert standard.domain is not None
-        assert standard.subdomain is not None
         assert standard.strand is not None
+        assert standard.sub_strand is not None
         assert standard.indicator is not None
 
 

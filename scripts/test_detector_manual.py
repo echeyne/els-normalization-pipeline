@@ -11,7 +11,7 @@ Prerequisites:
 
 Environment Variables:
 - AWS_REGION: AWS region (default: us-east-1)
-- BEDROCK_LLM_MODEL_ID: Bedrock model ID (default: global.anthropic.claude-sonnet-4-5-20250929-v1:0)
+- BEDROCK_LLM_MODEL_ID: Bedrock model ID (default: us.anthropic.claude-sonnet-4-6)
 - CONFIDENCE_THRESHOLD: Confidence threshold for review flagging (default: 0.7)
 
 Usage:
@@ -466,7 +466,7 @@ def main():
                 level = element.level.value
                 level_counts[level] = level_counts.get(level, 0) + 1
             
-            for level in ['domain', 'subdomain', 'strand', 'indicator']:
+            for level in ['domain', 'strand', 'sub_strand', 'indicator']:
                 count = level_counts.get(level, 0)
                 print(f"  {level.capitalize():12} {count:3d}")
             

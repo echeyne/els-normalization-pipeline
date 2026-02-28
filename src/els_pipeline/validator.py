@@ -43,7 +43,7 @@ CANONICAL_SCHEMA = {
                         "name": {"type": "string", "minLength": 1},
                     },
                 },
-                "subdomain": {
+                "strand": {
                     "oneOf": [
                         {"type": "null"},
                         {
@@ -56,7 +56,7 @@ CANONICAL_SCHEMA = {
                         },
                     ]
                 },
-                "strand": {
+                "sub_strand": {
                     "oneOf": [
                         {"type": "null"},
                         {
@@ -234,35 +234,6 @@ def _validate_schema(record: Dict[str, Any]) -> list[ValidationError]:
                 )
             )
         
-        # Check subdomain (optional)
-        if "subdomain" in std and std["subdomain"] is not None:
-            if isinstance(std["subdomain"], dict):
-                for field in ["code", "name"]:
-                    if field not in std["subdomain"]:
-                        errors.append(
-                            ValidationError(
-                                field_path=f"standard.subdomain.{field}",
-                                message=f"Missing required field: standard.subdomain.{field}",
-                                error_type="missing_field",
-                            )
-                        )
-                    elif not isinstance(std["subdomain"][field], str) or len(std["subdomain"][field]) == 0:
-                        errors.append(
-                            ValidationError(
-                                field_path=f"standard.subdomain.{field}",
-                                message=f"standard.subdomain.{field} must be a non-empty string",
-                                error_type="invalid_type",
-                            )
-                        )
-            else:
-                errors.append(
-                    ValidationError(
-                        field_path="standard.subdomain",
-                        message="standard.subdomain must be an object or null",
-                        error_type="invalid_type",
-                    )
-                )
-        
         # Check strand (optional)
         if "strand" in std and std["strand"] is not None:
             if isinstance(std["strand"], dict):
@@ -288,6 +259,35 @@ def _validate_schema(record: Dict[str, Any]) -> list[ValidationError]:
                     ValidationError(
                         field_path="standard.strand",
                         message="standard.strand must be an object or null",
+                        error_type="invalid_type",
+                    )
+                )
+        
+        # Check sub_strand (optional)
+        if "sub_strand" in std and std["sub_strand"] is not None:
+            if isinstance(std["sub_strand"], dict):
+                for field in ["code", "name"]:
+                    if field not in std["sub_strand"]:
+                        errors.append(
+                            ValidationError(
+                                field_path=f"standard.sub_strand.{field}",
+                                message=f"Missing required field: standard.sub_strand.{field}",
+                                error_type="missing_field",
+                            )
+                        )
+                    elif not isinstance(std["sub_strand"][field], str) or len(std["sub_strand"][field]) == 0:
+                        errors.append(
+                            ValidationError(
+                                field_path=f"standard.sub_strand.{field}",
+                                message=f"standard.sub_strand.{field} must be a non-empty string",
+                                error_type="invalid_type",
+                            )
+                        )
+            else:
+                errors.append(
+                    ValidationError(
+                        field_path="standard.sub_strand",
+                        message="standard.sub_strand must be an object or null",
                         error_type="invalid_type",
                     )
                 )
@@ -421,26 +421,26 @@ def serialize_record(
             "code": standard.domain.code,
             "name": standard.domain.name,
         },
-        "subdomain": None,
         "strand": None,
+        "sub_strand": None,
         "indicator": {
             "code": standard.indicator.code,
             "description": standard.indicator.description if standard.indicator.description is not None else "",
         },
     }
     
-    # Add subdomain if present
-    if standard.subdomain:
-        standard_obj["subdomain"] = {
-            "code": standard.subdomain.code,
-            "name": standard.subdomain.name,
-        }
-    
     # Add strand if present
     if standard.strand:
         standard_obj["strand"] = {
             "code": standard.strand.code,
             "name": standard.strand.name,
+        }
+    
+    # Add sub_strand if present
+    if standard.sub_strand:
+        standard_obj["sub_strand"] = {
+            "code": standard.sub_strand.code,
+            "name": standard.sub_strand.name,
         }
     
     # Build metadata
@@ -489,19 +489,19 @@ def deserialize_record(json_data: Dict[str, Any]) -> NormalizedStandard:
         description=None,
     )
     
-    subdomain = None
-    if std.get("subdomain"):
-        subdomain = HierarchyLevel(
-            code=std["subdomain"]["code"],
-            name=std["subdomain"]["name"],
-            description=None,
-        )
-    
     strand = None
     if std.get("strand"):
         strand = HierarchyLevel(
             code=std["strand"]["code"],
             name=std["strand"]["name"],
+            description=None,
+        )
+    
+    sub_strand = None
+    if std.get("sub_strand"):
+        sub_strand = HierarchyLevel(
+            code=std["sub_strand"]["code"],
+            name=std["sub_strand"]["name"],
             description=None,
         )
     
@@ -518,8 +518,8 @@ def deserialize_record(json_data: Dict[str, Any]) -> NormalizedStandard:
         state=json_data["state"],
         version_year=doc["version_year"],
         domain=domain,
-        subdomain=subdomain,
         strand=strand,
+        sub_strand=sub_strand,
         indicator=indicator,
         source_page=meta.get("page_number", 1),
         source_text=meta.get("source_text_chunk", ""),

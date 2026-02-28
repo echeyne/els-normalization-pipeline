@@ -37,12 +37,12 @@ def sample_standard():
             name="Language and Literacy Development",
             description=None,
         ),
-        subdomain=HierarchyLevel(
+        strand=HierarchyLevel(
             code="LLD.A",
             name="Listening and Speaking",
             description=None,
         ),
-        strand=HierarchyLevel(
+        sub_strand=HierarchyLevel(
             code="LLD.A.1",
             name="Comprehension",
             description=None,
@@ -153,17 +153,17 @@ def test_schema_validation_with_missing_indicator_description(sample_standard, s
     assert any(error.field_path == "standard.indicator.description" for error in result.errors)
 
 
-def test_schema_validation_with_null_subdomain(sample_standard, sample_document_meta):
-    """Test schema validation allows null subdomain."""
-    # Create a standard without subdomain
+def test_schema_validation_with_null_strand(sample_standard, sample_document_meta):
+    """Test schema validation allows null strand."""
+    # Create a standard without strand
     standard = NormalizedStandard(
         standard_id="US-CA-2021-LLD-1",
         country="US",
         state="CA",
         version_year=2021,
         domain=HierarchyLevel(code="LLD", name="Language and Literacy Development"),
-        subdomain=None,
         strand=None,
+        sub_strand=None,
         indicator=HierarchyLevel(code="1", name="", description="Test indicator"),
         source_page=1,
         source_text="Test",
@@ -173,8 +173,8 @@ def test_schema_validation_with_null_subdomain(sample_standard, sample_document_
     result = validate_record(record)
     
     assert result.is_valid is True
-    assert record["standard"]["subdomain"] is None
     assert record["standard"]["strand"] is None
+    assert record["standard"]["sub_strand"] is None
 
 
 def test_serialization_round_trip_with_full_hierarchy(sample_standard, sample_document_meta):
@@ -190,8 +190,8 @@ def test_serialization_round_trip_with_full_hierarchy(sample_standard, sample_do
     assert deserialized.state == sample_standard.state
     assert deserialized.version_year == sample_standard.version_year
     assert deserialized.domain.code == sample_standard.domain.code
-    assert deserialized.subdomain.code == sample_standard.subdomain.code
     assert deserialized.strand.code == sample_standard.strand.code
+    assert deserialized.sub_strand.code == sample_standard.sub_strand.code
     assert deserialized.indicator.code == sample_standard.indicator.code
 
 
@@ -203,8 +203,8 @@ def test_serialization_round_trip_with_minimal_hierarchy(sample_document_meta):
         state="TX",
         version_year=2020,
         domain=HierarchyLevel(code="MATH", name="Mathematics"),
-        subdomain=None,
         strand=None,
+        sub_strand=None,
         indicator=HierarchyLevel(code="1", name="", description="Count to 10"),
         source_page=5,
         source_text="Test text",
@@ -215,8 +215,8 @@ def test_serialization_round_trip_with_minimal_hierarchy(sample_document_meta):
     
     assert deserialized.standard_id == standard.standard_id
     assert deserialized.country == standard.country
-    assert deserialized.subdomain is None
     assert deserialized.strand is None
+    assert deserialized.sub_strand is None
 
 
 def test_standard_id_uniqueness_checking(sample_standard, sample_document_meta):

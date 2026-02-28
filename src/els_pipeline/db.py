@@ -115,41 +115,41 @@ def persist_standard(standard: NormalizedStandard, document_meta: Dict[str, Any]
                 """, (document_id, standard.domain.code, standard.domain.name))
                 domain_id = cur.fetchone()[0]
                 
-                # Insert subdomain if present
-                subdomain_id = None
-                if standard.subdomain:
+                # Insert strand if present (was subdomain)
+                strand_id = None
+                if standard.strand:
                     cur.execute("""
-                        INSERT INTO subdomains (domain_id, code, name)
+                        INSERT INTO strands (domain_id, code, name)
                         VALUES (%s, %s, %s)
                         ON CONFLICT (domain_id, code) DO UPDATE
                         SET name = EXCLUDED.name
                         RETURNING id
-                    """, (domain_id, standard.subdomain.code, standard.subdomain.name))
-                    subdomain_id = cur.fetchone()[0]
+                    """, (domain_id, standard.strand.code, standard.strand.name))
+                    strand_id = cur.fetchone()[0]
                 
-                # Insert strand if present
-                strand_id = None
-                if standard.strand and subdomain_id:
+                # Insert sub_strand if present (was strand)
+                sub_strand_id = None
+                if standard.sub_strand and strand_id:
                     cur.execute("""
-                        INSERT INTO strands (subdomain_id, code, name)
+                        INSERT INTO sub_strands (strand_id, code, name)
                         VALUES (%s, %s, %s)
-                        ON CONFLICT (subdomain_id, code) DO UPDATE
+                        ON CONFLICT (strand_id, code) DO UPDATE
                         SET name = EXCLUDED.name
                         RETURNING id
-                    """, (subdomain_id, standard.strand.code, standard.strand.name))
-                    strand_id = cur.fetchone()[0]
+                    """, (strand_id, standard.sub_strand.code, standard.sub_strand.name))
+                    sub_strand_id = cur.fetchone()[0]
                 
                 # Insert indicator
                 cur.execute("""
                     INSERT INTO indicators (
-                        standard_id, domain_id, subdomain_id, strand_id,
+                        standard_id, domain_id, strand_id, sub_strand_id,
                         code, description, source_page, source_text
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (standard_id) DO UPDATE
                     SET domain_id = EXCLUDED.domain_id,
-                        subdomain_id = EXCLUDED.subdomain_id,
                         strand_id = EXCLUDED.strand_id,
+                        sub_strand_id = EXCLUDED.sub_strand_id,
                         code = EXCLUDED.code,
                         description = EXCLUDED.description,
                         source_page = EXCLUDED.source_page,
@@ -157,8 +157,8 @@ def persist_standard(standard: NormalizedStandard, document_meta: Dict[str, Any]
                 """, (
                     standard.standard_id,
                     domain_id,
-                    subdomain_id,
                     strand_id,
+                    sub_strand_id,
                     standard.indicator.code,
                     standard.indicator.description,
                     standard.source_page,
@@ -335,16 +335,16 @@ def get_indicators_by_country_state(
     country: str,
     state: str,
     domain_code: Optional[str] = None,
-    subdomain_code: Optional[str] = None
+    strand_code: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
-    Get all indicators for a specific country and state, optionally filtered by domain/subdomain.
+    Get all indicators for a specific country and state, optionally filtered by domain/strand.
     
     Args:
         country: Two-letter country code
         state: State code
         domain_code: Optional domain code filter
-        subdomain_code: Optional subdomain code filter
+        strand_code: Optional strand code filter
     
     Returns:
         List of indicator records
@@ -358,9 +358,9 @@ def get_indicators_by_country_state(
                 where_clauses.append("dom.code = %s")
                 params.append(domain_code)
             
-            if subdomain_code:
-                where_clauses.append("sub.code = %s")
-                params.append(subdomain_code)
+            if strand_code:
+                where_clauses.append("str.code = %s")
+                params.append(strand_code)
             
             where_clause = " AND ".join(where_clauses)
             
@@ -371,10 +371,10 @@ def get_indicators_by_country_state(
                     i.description,
                     dom.code as domain_code,
                     dom.name as domain_name,
-                    sub.code as subdomain_code,
-                    sub.name as subdomain_name,
                     str.code as strand_code,
                     str.name as strand_name,
+                    substr.code as sub_strand_code,
+                    substr.name as sub_strand_name,
                     d.country,
                     d.state,
                     d.age_band,
@@ -383,8 +383,8 @@ def get_indicators_by_country_state(
                 FROM indicators i
                 JOIN domains dom ON i.domain_id = dom.id
                 JOIN documents d ON dom.document_id = d.id
-                LEFT JOIN subdomains sub ON i.subdomain_id = sub.id
                 LEFT JOIN strands str ON i.strand_id = str.id
+                LEFT JOIN sub_strands substr ON i.sub_strand_id = substr.id
                 WHERE {where_clause}
                 ORDER BY i.standard_id
             """

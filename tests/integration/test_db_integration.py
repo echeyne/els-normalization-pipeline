@@ -45,8 +45,8 @@ def sample_standards():
             state="CA",
             version_year=2021,
             domain=HierarchyLevel(code="LLD", name="Language and Literacy Development"),
-            subdomain=HierarchyLevel(code="LLD.A", name="Listening and Speaking"),
-            strand=None,
+            strand=HierarchyLevel(code="LLD.A", name="Listening and Speaking"),
+            sub_strand=None,
             indicator=HierarchyLevel(
                 code="LLD.A.1.a",
                 name="Indicator 1.2",
@@ -61,8 +61,8 @@ def sample_standards():
             state="TX",
             version_year=2022,
             domain=HierarchyLevel(code="MTH", name="Mathematics"),
-            subdomain=None,
             strand=None,
+            sub_strand=None,
             indicator=HierarchyLevel(code="MTH.1", name="Indicator 1", description="Count to 10"),
             source_page=1,
             source_text="Sample"
@@ -139,8 +139,8 @@ class TestStandardPersistence:
             state="CA",
             version_year=2021,
             domain=HierarchyLevel(code="LLD", name="Language and Literacy Development"),
-            subdomain=HierarchyLevel(code="LLD.A", name="Listening and Speaking"),
-            strand=HierarchyLevel(code="LLD.A.1", name="Comprehension"),
+            strand=HierarchyLevel(code="LLD.A", name="Listening and Speaking"),
+            sub_strand=HierarchyLevel(code="LLD.A.1", name="Comprehension"),
             indicator=HierarchyLevel(
                 code="LLD.A.1.a",
                 name="Indicator",
@@ -162,7 +162,7 @@ class TestStandardPersistence:
             
             persist_standard(standard, document_meta)
             
-            # Should insert document, domain, subdomain, strand, and indicator
+            # Should insert document, domain, strand, sub_strand, and indicator
             assert cursor.execute.call_count >= 5
             conn.commit.assert_called_once()
 
@@ -341,10 +341,10 @@ class TestIndicatorRetrieval:
                 'description': 'Test 1',
                 'domain_code': 'LLD',
                 'domain_name': 'Language',
-                'subdomain_code': None,
-                'subdomain_name': None,
                 'strand_code': None,
                 'strand_name': None,
+                'sub_strand_code': None,
+                'sub_strand_name': None,
                 'country': 'US',
                 'state': 'CA',
                 'age_band': '3-5',
@@ -357,10 +357,10 @@ class TestIndicatorRetrieval:
                 'description': 'Test 2',
                 'domain_code': 'MTH',
                 'domain_name': 'Mathematics',
-                'subdomain_code': None,
-                'subdomain_name': None,
                 'strand_code': None,
                 'strand_name': None,
+                'sub_strand_code': None,
+                'sub_strand_name': None,
                 'country': 'US',
                 'state': 'CA',
                 'age_band': '3-5',
@@ -390,10 +390,10 @@ class TestIndicatorRetrieval:
                 'description': 'Test',
                 'domain_code': 'LLD',
                 'domain_name': 'Language',
-                'subdomain_code': None,
-                'subdomain_name': None,
                 'strand_code': None,
                 'strand_name': None,
+                'sub_strand_code': None,
+                'sub_strand_name': None,
                 'country': 'US',
                 'state': 'CA',
                 'age_band': '3-5',
@@ -416,8 +416,8 @@ class TestIndicatorRetrieval:
             assert len(results) == 1
             assert results[0]['domain_code'] == 'LLD'
     
-    def test_get_indicators_with_subdomain_filter(self, mock_db_connection):
-        """Test indicator retrieval filtered by subdomain."""
+    def test_get_indicators_with_strand_filter(self, mock_db_connection):
+        """Test indicator retrieval filtered by strand."""
         conn, cursor = mock_db_connection
         
         mock_results = [
@@ -427,10 +427,10 @@ class TestIndicatorRetrieval:
                 'description': 'Test',
                 'domain_code': 'LLD',
                 'domain_name': 'Language',
-                'subdomain_code': 'LLD.A',
-                'subdomain_name': 'Listening',
-                'strand_code': None,
-                'strand_name': None,
+                'strand_code': 'LLD.A',
+                'strand_name': 'Listening',
+                'sub_strand_code': None,
+                'sub_strand_name': None,
                 'country': 'US',
                 'state': 'CA',
                 'age_band': '3-5',
@@ -443,15 +443,15 @@ class TestIndicatorRetrieval:
             mock_get_conn.return_value.__enter__.return_value = conn
             cursor.fetchall.return_value = mock_results
             
-            results = get_indicators_by_country_state('US', 'CA', subdomain_code='LLD.A')
+            results = get_indicators_by_country_state('US', 'CA', strand_code='LLD.A')
             
-            # Verify subdomain filter was applied
+            # Verify strand filter was applied
             cursor.execute.assert_called_once()
             query_sql = cursor.execute.call_args[0][0]
-            assert 'sub.code = %s' in query_sql
+            assert 'str.code = %s' in query_sql
             
             assert len(results) == 1
-            assert results[0]['subdomain_code'] == 'LLD.A'
+            assert results[0]['strand_code'] == 'LLD.A'
 
 
 class TestErrorHandling:

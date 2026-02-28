@@ -27,7 +27,7 @@ def hierarchy_level_strategy(draw, allow_description=False):
 
 
 @st.composite
-def normalized_standard_strategy(draw, include_subdomain=None, include_strand=None):
+def normalized_standard_strategy(draw, include_strand=None, include_sub_strand=None):
     """Generate a NormalizedStandard."""
     # Generate valid two-letter uppercase country codes (A-Z only)
     country = draw(st.text(min_size=2, max_size=2, alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
@@ -36,13 +36,13 @@ def normalized_standard_strategy(draw, include_subdomain=None, include_strand=No
     domain = draw(hierarchy_level_strategy())
     
     # Determine hierarchy depth
-    if include_subdomain is None:
-        include_subdomain = draw(st.booleans())
     if include_strand is None:
         include_strand = draw(st.booleans())
+    if include_sub_strand is None:
+        include_sub_strand = draw(st.booleans())
     
-    subdomain = draw(hierarchy_level_strategy()) if include_subdomain else None
     strand = draw(hierarchy_level_strategy()) if include_strand else None
+    sub_strand = draw(hierarchy_level_strategy()) if include_sub_strand else None
     indicator = draw(hierarchy_level_strategy(allow_description=True))
     
     standard_id = f"{country}-{state}-{version_year}-{domain.code}-{indicator.code}"
@@ -55,8 +55,8 @@ def normalized_standard_strategy(draw, include_subdomain=None, include_strand=No
         state=state,
         version_year=version_year,
         domain=domain,
-        subdomain=subdomain,
         strand=strand,
+        sub_strand=sub_strand,
         indicator=indicator,
         source_page=source_page,
         source_text=source_text,
@@ -254,14 +254,6 @@ def test_property_16_serialization_round_trip(standard, doc_meta):
     assert deserialized.domain.code == standard.domain.code
     assert deserialized.domain.name == standard.domain.name
     
-    # Subdomain
-    if standard.subdomain:
-        assert deserialized.subdomain is not None
-        assert deserialized.subdomain.code == standard.subdomain.code
-        assert deserialized.subdomain.name == standard.subdomain.name
-    else:
-        assert deserialized.subdomain is None
-    
     # Strand
     if standard.strand:
         assert deserialized.strand is not None
@@ -269,6 +261,14 @@ def test_property_16_serialization_round_trip(standard, doc_meta):
         assert deserialized.strand.name == standard.strand.name
     else:
         assert deserialized.strand is None
+    
+    # Sub-strand
+    if standard.sub_strand:
+        assert deserialized.sub_strand is not None
+        assert deserialized.sub_strand.code == standard.sub_strand.code
+        assert deserialized.sub_strand.name == standard.sub_strand.name
+    else:
+        assert deserialized.sub_strand is None
     
     # Indicator
     assert deserialized.indicator.code == standard.indicator.code

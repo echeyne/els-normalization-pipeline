@@ -4,6 +4,7 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 import boto3
+from botocore.config import Config as BotocoreConfig
 from botocore.exceptions import ClientError
 
 from .models import TextBlock, DetectedElement, DetectionResult, HierarchyLevelEnum
@@ -111,17 +112,18 @@ def chunk_text_blocks(
     return chunks
 
 
+
 def build_detection_prompt(blocks: List[TextBlock]) -> str:
     """
     Build a structured prompt for the LLM to detect hierarchy elements.
-    
+
     The prompt is designed to extract educational standards hierarchy from
-    early learning standards documents, identifying domains, subdomains,
-    strands, and indicators with their associated metadata.
-    
+    early learning standards documents, identifying domains, strands,
+    sub_strands, and indicators with their associated metadata.
+
     Args:
         blocks: List of text blocks to analyze
-        
+
     Returns:
         Formatted prompt string optimized for Claude Sonnet 4.5
     """
@@ -130,34 +132,51 @@ def build_detection_prompt(blocks: List[TextBlock]) -> str:
         f"[Page {block.page_number}] {block.text}"
         for block in blocks
     ])
-    
+
     prompt = f"""You are extracting the hierarchical structure from an early learning standards document. Your job is to identify every structural element and classify it into the correct hierarchy level.
 
 STRICT RULE: You must use ONLY the exact titles, codes (as applicable), numbers, and names that appear in the document text. Do NOT invent any titles. If a code does not exist, assign an appropriate one.
 
 HIERARCHY LEVELS (from highest to lowest):
-1. "domain" — The broadest organizational category. These are top-level developmental areas that contain everything else. They typically appear as section headers or in a table of contents.
-2. "subdomain" — An optional grouping within a domain, used by some states but not all. Only classify something as a subdomain if the document explicitly uses a term like "sub-strand", "sub-domain", "sub-area", or similar. Do NOT create subdomains that the document does not define.
-3. "strand" — A major category within a domain. These are typically numbered groupings (e.g., "1.0", "2.0") that organize related indicators together.
-4. "indicator" — The most specific level. These are individual learning goals, foundations, benchmarks, or skill statements. They describe what a child should know or be able to do. They are typically numbered with a decimal (e.g., "1.1", "1.2", "2.1").
+Our normalized hierarchy has exactly four levels. Every document must be mapped into these four levels:
+1. "domain" — The broadest category (nesting depth 1). The top-level developmental areas that contain everything else.
+2. "strand" — The second level of grouping (nesting depth 2). A grouping that sits directly under a domain and contains sub_strands or indicators beneath it.
+3. "sub_strand" — The third level (nesting depth 3). A grouping that sits under a strand (or directly under a domain if no strand exists) and contains indicators beneath it.
+4. "indicator" — The leaf level (nesting depth 4, or the deepest level present). Individual learning goals, foundations, benchmarks, or skill statements. These describe what a child should know or be able to do. They do NOT contain other structural elements beneath them.
 
-HOW TO CLASSIFY:
-- Look at how the document itself organizes content. Use the document's own hierarchy, not your assumptions.
-- If the document labels something as a "Domain", "Area", or uses it as a top-level header, classify it as "domain".
-- If the document labels something as a "Strand", "Standard", "Goal", or similar numbered grouping under a domain, classify it as "strand".
-- If the document labels something as a "Sub-Strand", "Sub-Domain", or similar, classify it as "subdomain".
-- If the document labels something as a "Foundation", "Indicator", "Benchmark", "Objective", "Skill", or it is a specific numbered learning statement, classify it as "indicator".
-- Age-specific descriptions (e.g., "Early (3 to 4 ½ Years)", "Later (4 to 5 1/2 Years)", "By 36 months") are NOT separate elements. Include them as part of the parent indicator's description.
+CRITICAL — CLASSIFY BY NESTING DEPTH, NOT BY DOCUMENT LABELS:
+Different states use different terminology. A document may call something a "Sub-Strand" but if it sits at the second nesting level (directly under a domain, with further groupings beneath it), it is a STRAND in our hierarchy. Similarly, a document may call something a "Topic" but if it is the third nesting level, it is a SUB_STRAND.
+
+Follow this process:
+1. FIRST, read the entire text and identify the document's own structural hierarchy. Map out how many nesting levels exist and what sits under what.
+2. THEN, map each nesting level to our four-level hierarchy based on POSITION, not labels:
+   - The topmost grouping (the broadest category that contains everything else) → "domain"
+   - The next level down (groups that sit directly inside a domain and contain further sub-groups or indicators) → "strand"
+   - The next level down (groups that contain indicators) → "sub_strand"
+   - The leaf-level items (specific learning statements, foundations, benchmarks, skills) → "indicator"
+3. If the document only has 3 nesting levels (no intermediate grouping between domain and the groups that hold indicators), then there are no strands — map the groups directly under the domain as "sub_strand" and their children as "indicator".
+4. If the document has 4+ nesting levels, collapse the deeper levels as needed so everything fits into our four-level model.
+
+EXAMPLES OF LABEL-TO-LEVEL MAPPING (these are illustrative, not exhaustive):
+- A document labels top sections as "Domains" and has "Strands" under them, with "Sub-Strands" under those, and "Foundations" at the bottom:
+  → Domain = domain, Strand = strand, Sub-Strand = sub_strand, Foundation = indicator
+- A document labels top sections as "Areas" with "Goals" under them and "Objectives" under those:
+  → Area = domain, Goal = strand, Objective = indicator (no sub_strand)
+- A document labels top sections as "Domains" with "Standards" directly containing "Indicators":
+  → Domain = domain, Standard = sub_strand (no strand), Indicator = indicator
+
+AGE-SPECIFIC DESCRIPTIONS:
+Age-band text (e.g., "Early (3 to 4 ½ Years)", "Later (4 to 5 ½ Years)", "By 36 months", "By 48 months") are NOT separate structural elements. Include all age-specific text as part of the parent indicator's description field.
 
 FIELD INSTRUCTIONS:
-- "level": One of "domain", "subdomain", "strand", or "indicator".
-- "code": The code or number from the document (e.g., "1.0", "1.1", "ATL"). If the document does not assign a code, apply an appropriate one"".
+- "level": One of "domain", "strand", "sub_strand", or "indicator".
+- "code": The code or number from the document (e.g., "1.0", "1.1", "ATL"). If the document does not assign a code, assign an appropriate one.
 - "title": The exact title as written in the document. Do NOT paraphrase or shorten it.
 - "description": The full descriptive text associated with this element, including any age-band details. Combine all age-specific text into one description. If there is no description beyond the title, use an empty string "".
 - "confidence": A float between 0.0 and 1.0 reflecting how certain you are about the classification:
-  - 0.95+ : Element is explicitly labeled with its level and has a clear code.
-  - 0.85-0.94 : Element has clear structural cues but is not explicitly labeled.
-  - 0.70-0.84 : Element fits the pattern but has some ambiguity.
+  - 0.95+ : Nesting position is unambiguous and the element clearly maps to this level.
+  - 0.85-0.94 : Nesting position is clear but the document's labeling is somewhat ambiguous.
+  - 0.70-0.84 : The nesting structure has some ambiguity (e.g., unclear if a level should be strand or sub_strand).
   - Below 0.70 : Uncertain classification.
 - "source_page": The page number from the [Page N] marker where this element appears.
 - "source_text": The exact text from the document that you used to identify this element. Copy it verbatim.
@@ -165,7 +184,7 @@ FIELD INSTRUCTIONS:
 OUTPUT FORMAT — Return ONLY a JSON array. No text before or after it.
 [
   {{
-    "level": "domain|subdomain|strand|indicator",
+    "level": "domain|strand|sub_strand|indicator",
     "code": "exact code from document or empty string",
     "title": "exact title from document",
     "description": "full description from document including age-specific details",
@@ -179,12 +198,14 @@ FINAL REMINDERS:
 - Return ONLY the JSON array. No markdown, no explanation, no commentary.
 - Extract EVERY structural element you find. Do not skip any.
 - Use the page numbers from the [Page N] markers in the text.
+- Remember: classify by NESTING DEPTH in the document, NOT by what the document calls each level.
 
 TEXT TO ANALYZE:
 
 {text_content}"""
-    
+
     return prompt
+
 
 
 def _extract_json_from_response(response_text: str) -> str:
@@ -405,7 +426,15 @@ def call_bedrock_llm(prompt: str, max_retries: int = MAX_BEDROCK_RETRIES) -> str
         ClientError: If Bedrock API call fails after all retries
         ValueError: If response format is unexpected
     """
-    bedrock = boto3.client('bedrock-runtime', region_name=Config.AWS_REGION)
+    bedrock = boto3.client(
+        'bedrock-runtime',
+        region_name=Config.AWS_REGION,
+        config=BotocoreConfig(
+            read_timeout=300,   # 5 minutes — Claude can be slow with large outputs
+            connect_timeout=10,
+            retries={"max_attempts": 0}  # We handle retries ourselves
+        )
+    )
     request_body = _build_bedrock_request(prompt)
     
     logger.info(f"Calling Bedrock with model: {Config.BEDROCK_LLM_MODEL_ID}")
