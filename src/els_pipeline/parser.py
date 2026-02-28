@@ -373,33 +373,12 @@ def parse_hierarchy(
             elif canonical_level == HierarchyLevelEnum.SUB_STRAND:
                 current_sub_strand = element
             elif canonical_level == HierarchyLevelEnum.INDICATOR:
-                # Build standard using current context
+                # Build standard using current context (document-order parenting).
+                # We do NOT require code-prefix matching because many state
+                # standards use independent coding schemes (e.g. domain "ATL"
+                # with indicator "1.1").  Document order is the authoritative
+                # signal for parent–child relationships.
                 if not current_domain:
-                    orphaned.append(element)
-                    continue
-                
-                # Check if indicator code matches domain code prefix
-                if not element.code.startswith(current_domain.code):
-                    orphaned.append(element)
-                    continue
-                
-                # For depth 3+, require strand
-                if depth >= 3 and not current_strand:
-                    orphaned.append(element)
-                    continue
-                
-                # For depth 3+, check if indicator code matches strand prefix
-                if depth >= 3 and current_strand and not element.code.startswith(current_strand.code):
-                    orphaned.append(element)
-                    continue
-                
-                # For depth 4, require sub_strand
-                if depth >= 4 and not current_sub_strand:
-                    orphaned.append(element)
-                    continue
-                
-                # For depth 4, check if indicator code matches sub_strand prefix
-                if depth >= 4 and current_sub_strand and not element.code.startswith(current_sub_strand.code):
                     orphaned.append(element)
                     continue
                 

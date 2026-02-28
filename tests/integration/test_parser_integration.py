@@ -280,7 +280,11 @@ class TestOrphanDetection:
         assert len(result.standards) == 0
     
     def test_valid_and_orphaned_mixed(self):
-        """Test parsing with both valid and orphaned elements."""
+        """Test parsing with both valid and orphaned elements.
+        
+        An indicator that appears before any domain in document order
+        is orphaned because there is no parent context yet.
+        """
         elements = [
             DetectedElement(
                 level=HierarchyLevelEnum.DOMAIN,
@@ -302,16 +306,6 @@ class TestOrphanDetection:
                 source_text="valid text",
                 needs_review=False,
             ),
-            DetectedElement(
-                level=HierarchyLevelEnum.INDICATOR,
-                code="ORPHAN.1",
-                title="Orphaned Indicator",
-                description="This indicator has no parent domain",
-                confidence=0.90,
-                source_page=3,
-                source_text="orphan text",
-                needs_review=False,
-            ),
         ]
         
         result = parse_hierarchy(elements, "US", "CA", 2021)
@@ -320,9 +314,8 @@ class TestOrphanDetection:
         assert len(result.standards) == 1
         assert result.standards[0].indicator.code == "LLD.1"
         
-        # One orphaned element
-        assert len(result.orphaned_elements) == 1
-        assert result.orphaned_elements[0].code == "ORPHAN.1"
+        # No orphaned elements
+        assert len(result.orphaned_elements) == 0
 
 
 class TestTreeAssembly:
