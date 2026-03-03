@@ -412,7 +412,7 @@ Resources:
       Runtime: python3.11
       Handler: els_pipeline.handlers.detection_handler
       Role: !GetAtt StructureDetectorLambdaRole.Arn
-      Timeout: 600
+      Timeout: 900
       MemorySize: 1024
       Environment:
         Variables:
@@ -437,7 +437,7 @@ Resources:
       Runtime: python3.11
       Handler: els_pipeline.handlers.parsing_handler
       Role: !GetAtt HierarchyParserLambdaRole.Arn
-      Timeout: 600
+      Timeout: 900
       MemorySize: 1024
       Environment:
         Variables:
