@@ -123,7 +123,7 @@ def call_bedrock_llm(prompt: str, max_retries: int = MAX_BEDROCK_RETRIES) -> str
     Call Amazon Bedrock LLM with the given prompt.
 
     Mirrors the implementation in detector.py: boto3 bedrock-runtime client,
-    Config.AWS_REGION, Config.BEDROCK_LLM_MODEL_ID, retry on ClientError.
+    Config.AWS_REGION, Config.BEDROCK_PARSER_LLM_MODEL_ID, retry on ClientError.
 
     Args:
         prompt: The prompt to send to the LLM
@@ -153,7 +153,7 @@ def call_bedrock_llm(prompt: str, max_retries: int = MAX_BEDROCK_RETRIES) -> str
         "temperature": LLM_TEMPERATURE,
     }
 
-    logger.info(f"Calling Bedrock with model: {Config.BEDROCK_LLM_MODEL_ID}")
+    logger.info(f"Calling Bedrock with model: {Config.BEDROCK_PARSER_LLM_MODEL_ID}")
 
     for attempt in range(max_retries + 1):
         try:

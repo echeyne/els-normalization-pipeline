@@ -443,7 +443,7 @@ def call_bedrock_llm(prompt: str, max_retries: int = MAX_BEDROCK_RETRIES) -> str
     )
     request_body = _build_bedrock_request(prompt)
     
-    logger.info(f"Calling Bedrock with model: {Config.BEDROCK_LLM_MODEL_ID}")
+    logger.info(f"Calling Bedrock with model: {Config.BEDROCK_DETECTOR_LLM_MODEL_ID}")
     logger.debug(f"Prompt length: {len(prompt)} characters, ~{estimate_tokens(prompt)} tokens")
     
     for attempt in range(max_retries + 1):

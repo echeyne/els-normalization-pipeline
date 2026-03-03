@@ -417,7 +417,7 @@ Resources:
       Environment:
         Variables:
           ELS_PROCESSED_BUCKET: !Ref ProcessedJsonBucket
-          BEDROCK_LLM_MODEL_ID: "us.anthropic.claude-sonnet-4-6"
+          BEDROCK_DETECTOR_LLM_MODEL_ID: "us.anthropic.claude-opus-4-6-v1"
           CONFIDENCE_THRESHOLD: "0.7"
           ENVIRONMENT: !Ref EnvironmentName
       Code:
