@@ -405,12 +405,12 @@ def serialize_record(
 ) -> Dict[str, Any]:
     """
     Serialize a NormalizedStandard to Canonical JSON format.
-    
+
     Args:
         standard: The NormalizedStandard to serialize
         document_meta: Document metadata (title, source_url, age_band, publishing_agency)
         page_meta: Optional page metadata (page_number, source_text_chunk, last_verified)
-        
+
     Returns:
         Canonical JSON dict
     """
@@ -420,6 +420,7 @@ def serialize_record(
         "domain": {
             "code": standard.domain.code,
             "name": standard.domain.name,
+            "description": standard.domain.description,
         },
         "strand": None,
         "sub_strand": None,
@@ -428,28 +429,30 @@ def serialize_record(
             "description": standard.indicator.description if standard.indicator.description is not None else "",
         },
     }
-    
+
     # Add strand if present
     if standard.strand:
         standard_obj["strand"] = {
             "code": standard.strand.code,
             "name": standard.strand.name,
+            "description": standard.strand.description,
         }
-    
+
     # Add sub_strand if present
     if standard.sub_strand:
         standard_obj["sub_strand"] = {
             "code": standard.sub_strand.code,
             "name": standard.sub_strand.name,
+            "description": standard.sub_strand.description,
         }
-    
+
     # Build metadata
     metadata = page_meta.copy() if page_meta else {}
     if "page_number" not in metadata:
         metadata["page_number"] = standard.source_page
     if "source_text_chunk" not in metadata:
         metadata["source_text_chunk"] = standard.source_text
-    
+
     # Build canonical JSON
     canonical = {
         "country": standard.country,
@@ -458,60 +461,63 @@ def serialize_record(
             "title": document_meta["title"],
             "version_year": standard.version_year,
             "source_url": document_meta["source_url"],
-            "age_band": document_meta.get("age_band", "3-4"),
+            "age_band": standard.age_band or document_meta.get("age_band", "PK"),
             "publishing_agency": document_meta["publishing_agency"],
         },
         "standard": standard_obj,
         "metadata": metadata,
     }
-    
+
     return canonical
 
 
 def deserialize_record(json_data: Dict[str, Any]) -> NormalizedStandard:
     """
     Deserialize Canonical JSON to a NormalizedStandard object.
-    
+
+    Preserves descriptions for domains, strands, and sub_strands so they
+    can be persisted to the database.
+
     Args:
         json_data: Canonical JSON dict
-        
+
     Returns:
         NormalizedStandard object
     """
     std = json_data["standard"]
     doc = json_data["document"]
     meta = json_data.get("metadata", {})
-    
-    # Build hierarchy levels
+
+    # Build hierarchy levels — preserve descriptions
     domain = HierarchyLevel(
         code=std["domain"]["code"],
         name=std["domain"]["name"],
-        description=None,
+        description=std["domain"].get("description"),
     )
-    
+
     strand = None
     if std.get("strand"):
         strand = HierarchyLevel(
             code=std["strand"]["code"],
             name=std["strand"]["name"],
-            description=None,
+            description=std["strand"].get("description"),
         )
-    
+
     sub_strand = None
     if std.get("sub_strand"):
         sub_strand = HierarchyLevel(
             code=std["sub_strand"]["code"],
             name=std["sub_strand"]["name"],
-            description=None,
+            description=std["sub_strand"].get("description"),
         )
-    
+
     indicator = HierarchyLevel(
         code=std["indicator"]["code"],
         name="",  # Indicators don't have names in the schema
         description=std["indicator"]["description"] if std["indicator"]["description"] else None,
     )
-    
-    # Build NormalizedStandard
+
+    # Build NormalizedStandard — age_band from document level
     return NormalizedStandard(
         standard_id=std["standard_id"],
         country=json_data["country"],
@@ -521,6 +527,7 @@ def deserialize_record(json_data: Dict[str, Any]) -> NormalizedStandard:
         strand=strand,
         sub_strand=sub_strand,
         indicator=indicator,
+        age_band=doc.get("age_band"),
         source_page=meta.get("page_number", 1),
         source_text=meta.get("source_text_chunk", ""),
     )

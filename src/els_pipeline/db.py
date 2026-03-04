@@ -104,15 +104,17 @@ class DatabaseConnection:
 def persist_standard(standard: NormalizedStandard, document_meta: Dict[str, Any]) -> None:
     """
     Persist a normalized standard to the database.
-    
+
     Args:
-        standard: The normalized standard to persist
-        document_meta: Document metadata including title, source_url, age_band, publishing_agency
+        standard: The normalized standard to persist (includes age_band and
+                  hierarchy-level descriptions from the parser)
+        document_meta: Document metadata including title, source_url, publishing_agency
     """
     with DatabaseConnection.get_connection() as conn:
         with conn.cursor() as cur:
             try:
-                # Insert or get document
+                # Insert or get document — age_band comes from the parsed
+                # indicator (standard.age_band), not document_meta.
                 cur.execute("""
                     INSERT INTO documents (country, state, title, version_year, source_url, age_band, publishing_agency)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -127,58 +129,62 @@ def persist_standard(standard: NormalizedStandard, document_meta: Dict[str, Any]
                     document_meta['title'],
                     standard.version_year,
                     document_meta.get('source_url'),
-                    document_meta['age_band'],
+                    standard.age_band or "PK",
                     document_meta['publishing_agency']
                 ))
                 document_id = cur.fetchone()[0]
-                
-                # Insert or get domain
+
+                # Insert or get domain (with description)
                 cur.execute("""
-                    INSERT INTO domains (document_id, code, name)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO domains (document_id, code, name, description)
+                    VALUES (%s, %s, %s, %s)
                     ON CONFLICT (document_id, code) DO UPDATE
-                    SET name = EXCLUDED.name
+                    SET name = EXCLUDED.name,
+                        description = EXCLUDED.description
                     RETURNING id
-                """, (document_id, standard.domain.code, standard.domain.name))
+                """, (document_id, standard.domain.code, standard.domain.name, standard.domain.description))
                 domain_id = cur.fetchone()[0]
-                
-                # Insert strand if present (was subdomain)
+
+                # Insert strand if present (with description)
                 strand_id = None
                 if standard.strand:
                     cur.execute("""
-                        INSERT INTO strands (domain_id, code, name)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO strands (domain_id, code, name, description)
+                        VALUES (%s, %s, %s, %s)
                         ON CONFLICT (domain_id, code) DO UPDATE
-                        SET name = EXCLUDED.name
+                        SET name = EXCLUDED.name,
+                            description = EXCLUDED.description
                         RETURNING id
-                    """, (domain_id, standard.strand.code, standard.strand.name))
+                    """, (domain_id, standard.strand.code, standard.strand.name, standard.strand.description))
                     strand_id = cur.fetchone()[0]
-                
-                # Insert sub_strand if present (was strand)
+
+                # Insert sub_strand if present (with description)
                 sub_strand_id = None
                 if standard.sub_strand and strand_id:
                     cur.execute("""
-                        INSERT INTO sub_strands (strand_id, code, name)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO sub_strands (strand_id, code, name, description)
+                        VALUES (%s, %s, %s, %s)
                         ON CONFLICT (strand_id, code) DO UPDATE
-                        SET name = EXCLUDED.name
+                        SET name = EXCLUDED.name,
+                            description = EXCLUDED.description
                         RETURNING id
-                    """, (strand_id, standard.sub_strand.code, standard.sub_strand.name))
+                    """, (strand_id, standard.sub_strand.code, standard.sub_strand.name, standard.sub_strand.description))
                     sub_strand_id = cur.fetchone()[0]
-                
-                # Insert indicator
+
+                # Insert indicator (with age_band from parsed data)
                 cur.execute("""
                     INSERT INTO indicators (
                         standard_id, domain_id, strand_id, sub_strand_id,
-                        code, description, source_page, source_text
+                        code, description, age_band, source_page, source_text
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (standard_id) DO UPDATE
                     SET domain_id = EXCLUDED.domain_id,
                         strand_id = EXCLUDED.strand_id,
                         sub_strand_id = EXCLUDED.sub_strand_id,
                         code = EXCLUDED.code,
                         description = EXCLUDED.description,
+                        age_band = EXCLUDED.age_band,
                         source_page = EXCLUDED.source_page,
                         source_text = EXCLUDED.source_text
                 """, (
@@ -188,13 +194,14 @@ def persist_standard(standard: NormalizedStandard, document_meta: Dict[str, Any]
                     sub_strand_id,
                     standard.indicator.code,
                     standard.indicator.description,
+                    standard.age_band,
                     standard.source_page,
                     standard.source_text
                 ))
-                
+
                 conn.commit()
                 logger.info(f"Persisted standard: {standard.standard_id}")
-                
+
             except Exception as e:
                 conn.rollback()
                 logger.error(f"Error persisting standard {standard.standard_id}: {e}")
@@ -398,10 +405,14 @@ def get_indicators_by_country_state(
                     i.description,
                     dom.code as domain_code,
                     dom.name as domain_name,
+                    dom.description as domain_description,
                     str.code as strand_code,
                     str.name as strand_name,
+                    str.description as strand_description,
                     substr.code as sub_strand_code,
                     substr.name as sub_strand_name,
+                    substr.description as sub_strand_description,
+                    i.age_band as indicator_age_band,
                     d.country,
                     d.state,
                     d.age_band,

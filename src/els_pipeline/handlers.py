@@ -427,7 +427,7 @@ def _indicator_to_canonical(indicator: Dict[str, Any], event: Dict[str, Any]) ->
 
     std_obj: Dict[str, Any] = {
         "standard_id": indicator.get("standard_id", ""),
-        "domain": indicator.get("domain") or {"code": "", "name": ""},
+        "domain": indicator.get("domain") or {"code": "", "name": "", "description": None},
         "strand": indicator.get("strand"),
         "sub_strand": indicator.get("sub_strand"),
         "indicator": indicator.get("indicator") or {"code": "", "description": ""},
@@ -440,6 +440,9 @@ def _indicator_to_canonical(indicator: Dict[str, Any], event: Dict[str, Any]) ->
         if "description" not in ind:
             ind["description"] = ind.get("name", "")
 
+    # age_band comes from the parsed indicator data, not document metadata
+    age_band = indicator.get("age_band") or event.get("age_band", "PK")
+
     return {
         "country": indicator.get("country", event.get("country", "")),
         "state": indicator.get("state", event.get("state", "")),
@@ -447,7 +450,7 @@ def _indicator_to_canonical(indicator: Dict[str, Any], event: Dict[str, Any]) ->
             "title": indicator.get("document", {}).get("title", "") if isinstance(indicator.get("document"), dict) else event.get("document_title", f"{event.get('state', '')} Early Learning Standards"),
             "version_year": indicator.get("version_year", event.get("version_year", 0)),
             "source_url": indicator.get("document", {}).get("source_url", "") if isinstance(indicator.get("document"), dict) else event.get("source_url", ""),
-            "age_band": indicator.get("document", {}).get("age_band", "3-4") if isinstance(indicator.get("document"), dict) else event.get("age_band", "3-4"),
+            "age_band": age_band,
             "publishing_agency": indicator.get("document", {}).get("publishing_agency", "") if isinstance(indicator.get("document"), dict) else event.get("publishing_agency", ""),
         },
         "standard": std_obj,
@@ -711,7 +714,7 @@ def persistence_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Lambda handler for data persistence stage.
 
     Loads validated canonical records from S3 and persists them
-    to Aurora PostgreSQL using the db module.
+    to Aurora PostgreSQL via the persister module.
 
     Expected event structure:
     {
@@ -738,104 +741,9 @@ def persistence_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         logger.info(f"Starting data persistence: run_id={event.get('run_id')}, country={event.get('country')}")
 
-        from .validator import deserialize_record
-        from .db import DatabaseConnection, persist_standard
+        from .persister import persist_records
 
-        # Load validation summary from S3
-        validation_key = event["output_artifact"]
-
-        try:
-            validation_summary = load_json_from_s3(Config.S3_PROCESSED_BUCKET, validation_key)
-            validated_keys = validation_summary["validated_records"]
-            logger.info(f"Loaded validation summary from S3: {validation_key}, {len(validated_keys)} records to persist")
-        except ClientError as e:
-            error_msg = f"Failed to load validation summary from S3: {validation_key}"
-            logger.error(f"{error_msg} - {str(e)}")
-            return _handle_error("data_persistence", Exception(error_msg), event)
-
-        if not validated_keys:
-            logger.warning("No validated records to persist")
-            return {
-                "status": "success",
-                "stage_name": "data_persistence",
-                "records_persisted": 0,
-                "errors": 0,
-                "country": event["country"],
-                "state": event["state"],
-                "version_year": event["version_year"],
-                "run_id": event.get("run_id")
-            }
-
-        # Initialize database connection pool
-        DatabaseConnection.initialize_pool()
-
-        records_persisted = 0
-        persist_errors = []
-
-        try:
-            for record_key in validated_keys:
-                try:
-                    # Load canonical JSON record from S3
-                    canonical_json = load_json_from_s3(Config.S3_PROCESSED_BUCKET, record_key)
-
-                    # Deserialize to NormalizedStandard
-                    standard = deserialize_record(canonical_json)
-
-                    # Extract document metadata for persist_standard
-                    document_meta = {
-                        "title": canonical_json["document"]["title"],
-                        "source_url": canonical_json["document"].get("source_url"),
-                        "age_band": canonical_json["document"].get("age_band", "3-4"),
-                        "publishing_agency": canonical_json["document"]["publishing_agency"],
-                    }
-
-                    # Persist to database
-                    persist_standard(standard, document_meta)
-                    records_persisted += 1
-
-                except ClientError as e:
-                    error_msg = f"Failed to load record from S3: {record_key}"
-                    logger.error(f"{error_msg} - {str(e)}")
-                    persist_errors.append({"record_key": record_key, "error": error_msg})
-                except Exception as e:
-                    logger.error(f"Failed to persist record {record_key}: {str(e)}")
-                    persist_errors.append({"record_key": record_key, "error": str(e)})
-
-            # Record the pipeline run itself
-            try:
-                with DatabaseConnection.get_connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO pipeline_runs (
-                                run_id, document_s3_key, country, state, version_year,
-                                status, total_indicators, total_validated, completed_at
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                            ON CONFLICT (run_id) DO UPDATE
-                            SET status = EXCLUDED.status,
-                                total_indicators = EXCLUDED.total_indicators,
-                                total_validated = EXCLUDED.total_validated,
-                                completed_at = NOW()
-                        """, (
-                            event.get("run_id"),
-                            validation_key,
-                            event["country"],
-                            event["state"],
-                            event["version_year"],
-                            "completed" if not persist_errors else "partial",
-                            len(validated_keys),
-                            records_persisted,
-                        ))
-                        conn.commit()
-            except Exception as e:
-                logger.error(f"Failed to record pipeline run: {str(e)}")
-
-        finally:
-            DatabaseConnection.close_pool()
-
-        logger.info(
-            f"Data persistence completed: "
-            f"persisted={records_persisted}, errors={len(persist_errors)}"
-        )
+        records_persisted, persist_errors = persist_records(event)
 
         return {
             "status": "success",
