@@ -171,18 +171,19 @@ def persist_standard(standard: NormalizedStandard, document_meta: Dict[str, Any]
                     """, (strand_id, standard.sub_strand.code, standard.sub_strand.name, standard.sub_strand.description))
                     sub_strand_id = cur.fetchone()[0]
 
-                # Insert indicator (with age_band from parsed data)
+                # Insert indicator (with title, description, and age_band from parsed data)
                 cur.execute("""
                     INSERT INTO indicators (
                         standard_id, domain_id, strand_id, sub_strand_id,
-                        code, description, age_band, source_page, source_text
+                        code, title, description, age_band, source_page, source_text
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (standard_id) DO UPDATE
                     SET domain_id = EXCLUDED.domain_id,
                         strand_id = EXCLUDED.strand_id,
                         sub_strand_id = EXCLUDED.sub_strand_id,
                         code = EXCLUDED.code,
+                        title = EXCLUDED.title,
                         description = EXCLUDED.description,
                         age_band = EXCLUDED.age_band,
                         source_page = EXCLUDED.source_page,
@@ -193,6 +194,7 @@ def persist_standard(standard: NormalizedStandard, document_meta: Dict[str, Any]
                     strand_id,
                     sub_strand_id,
                     standard.indicator.code,
+                    standard.indicator.name or None,
                     standard.indicator.description,
                     standard.age_band,
                     standard.source_page,
@@ -402,6 +404,7 @@ def get_indicators_by_country_state(
                 SELECT 
                     i.standard_id,
                     i.code as indicator_code,
+                    i.title as indicator_title,
                     i.description,
                     dom.code as domain_code,
                     dom.name as domain_name,

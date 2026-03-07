@@ -74,6 +74,7 @@ CANONICAL_SCHEMA = {
                     "required": ["code", "description"],
                     "properties": {
                         "code": {"type": "string", "minLength": 1},
+                        "name": {"oneOf": [{"type": "null"}, {"type": "string"}]},
                         "description": {"type": "string", "minLength": 1},
                     },
                 },
@@ -319,6 +320,16 @@ def _validate_schema(record: Dict[str, Any]) -> list[ValidationError]:
                             error_type="invalid_type",
                         )
                     )
+            # Validate optional name field (title) — must be a string or null if present
+            if "name" in std["indicator"] and std["indicator"]["name"] is not None:
+                if not isinstance(std["indicator"]["name"], str):
+                    errors.append(
+                        ValidationError(
+                            field_path="standard.indicator.name",
+                            message="standard.indicator.name must be a string or null",
+                            error_type="invalid_type",
+                        )
+                    )
         else:
             errors.append(
                 ValidationError(
@@ -426,6 +437,7 @@ def serialize_record(
         "sub_strand": None,
         "indicator": {
             "code": standard.indicator.code,
+            "name": standard.indicator.name if standard.indicator.name else None,
             "description": standard.indicator.description if standard.indicator.description is not None else "",
         },
     }
@@ -513,7 +525,7 @@ def deserialize_record(json_data: Dict[str, Any]) -> NormalizedStandard:
 
     indicator = HierarchyLevel(
         code=std["indicator"]["code"],
-        name="",  # Indicators don't have names in the schema
+        name=std["indicator"].get("name") or "",
         description=std["indicator"]["description"] if std["indicator"]["description"] else None,
     )
 

@@ -111,7 +111,9 @@ Return a JSON array where each object represents one indicator with its full hie
 Rules:
 - Populate domain_description, strand_description, and sub_strand_description from the document text (the description field of the corresponding element). Use null if no description exists for that level.
 - If a hierarchy level does not exist (e.g. no sub_strand), set its code, name, and description to null.
-- For age_band: examine each indicator's code, title, description, and source_text for age-related information (e.g. "PK3", "PK4", "36 months", "48 months", "3-4 1/2 years). If you detect a specific age band, use that value. If no age band is detectable, set age_band to null. The caller will apply the default age band "{age_band}" for any null values.
+- For indicator_name: use the actual title of the indicator (e.g. "Curiosity and Interest"), NOT age-band labels like "Early", "Later", "By 36 months", etc. Strip any age-band pre-text from the indicator title. The age-band information belongs in the age_band field.
+- For indicator_description: use the full descriptive text of the indicator. This may be null if no description exists beyond the title.
+- For age_band: examine each indicator's code, title, description, and source_text for age-related information (e.g. "PK3", "PK4", "36 months", "48 months", "3-4 1/2 years). If you detect a specific age band, use that value. You should normalize the age band to be in months (i.e. PK3 is 0-48, PK4 is 0-60, 3 to 4 ½ Years is 36-54) If no age band is detectable, set age_band to null. The caller will apply the default age band "{age_band}" for any null values.
 - Return ONLY the JSON array, no other text.
 - Every indicator element must appear exactly once in the output."""
 
@@ -307,7 +309,7 @@ def parse_hierarchy(
     country: str,
     state: str,
     version_year: int,
-    age_band: str = "PK",
+    age_band: str,
 ) -> ParseResult:
     """
     Parse detected elements into normalized standards using an LLM.

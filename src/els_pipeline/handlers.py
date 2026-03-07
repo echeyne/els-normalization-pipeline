@@ -359,7 +359,8 @@ def parsing_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             elements=elements,
             country=event["country"],
             state=event["state"],
-            version_year=event["version_year"]
+            version_year=event["version_year"],
+            age_band=event["age_band"]
         )
 
         if result.status == "error":

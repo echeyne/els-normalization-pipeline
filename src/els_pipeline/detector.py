@@ -142,7 +142,7 @@ Our normalized hierarchy has exactly four levels. Every document must be mapped 
 1. "domain" — The broadest category (nesting depth 1). The top-level developmental areas that contain everything else.
 2. "strand" — The second level of grouping (nesting depth 2). A grouping that sits directly under a domain and contains sub_strands or indicators beneath it.
 3. "sub_strand" — The third level (nesting depth 3). A grouping that sits under a strand (or directly under a domain if no strand exists) and contains indicators beneath it.
-4. "indicator" — The leaf level (nesting depth 4, or the deepest level present). Individual learning goals, foundations, benchmarks, or skill statements. These describe what a child should know or be able to do. They do NOT contain other structural elements beneath them.
+4. "indicator" — The leaf level (nesting depth 4, or the deepest level present). Individual learning goals, foundations, benchmarks, or skill statements. These describe what a child should know or be able to do. They do NOT contain other structural elements beneath them. IMPORTANT: An indicator is the learning goal statement itself (e.g., "The child demonstrates an awareness of self."), NOT the lettered/bulleted examples or observable behaviors listed beneath it. Those examples illustrate the indicator but are not separate indicators.
 
 CRITICAL — CLASSIFY BY NESTING DEPTH, NOT BY DOCUMENT LABELS:
 Different states use different terminology. A document may call something a "Sub-Strand" but if it sits at the second nesting level (directly under a domain, with further groupings beneath it), it is a STRAND in our hierarchy. Similarly, a document may call something a "Topic" but if it is the third nesting level, it is a SUB_STRAND.
@@ -157,6 +157,18 @@ Follow this process:
 3. If the document only has 3 nesting levels (no intermediate grouping between domain and the groups that hold indicators), then there are no strands — map the groups directly under the domain as "sub_strand" and their children as "indicator".
 4. If the document has 4+ nesting levels, collapse the deeper levels as needed so everything fits into our four-level model.
 
+CRITICAL — INDICATORS vs. EXAMPLES/EVIDENCE:
+Many early learning standards documents list "Indicators and Examples" or "Examples in the Context of Daily Routines, Activities, and Play" beneath a learning goal statement. These lettered or bulleted items (e.g., "a. Demonstrates self-confidence", "b. Makes personal preferences known to others") are NOT separate indicators. They are illustrative examples or observable behaviors that help teachers recognize the indicator in practice.
+
+The actual INDICATOR is the overarching learning goal statement that appears ABOVE these examples, such as "The child demonstrates an awareness of self." The description paragraph that follows it (e.g., "Children develop a sense of personal identity as they begin to recognize the characteristics that make them unique as individuals and to build self-esteem.") is the indicator's description.
+
+When you encounter this pattern:
+- The learning goal statement (e.g., "The child demonstrates an awareness of self.") → this is the INDICATOR title
+- The explanatory paragraph below it → this is the INDICATOR description
+- The lettered/bulleted examples beneath (a, b, c, d, e...) with their sub-bullets → these are NOT separate indicators. Do NOT extract them as indicators. They are supporting examples and should be IGNORED as structural elements. You may optionally include them as part of the indicator's description text, but they must NOT be emitted as their own elements.
+
+Similarly, sections labeled "Indicators and Examples in the Context of Daily Routines, Activities, and Play" are section headers for the examples area — they are NOT indicators themselves.
+
 EXAMPLES OF LABEL-TO-LEVEL MAPPING (these are illustrative, not exhaustive):
 - A document labels top sections as "Domains" and has "Strands" under them, with "Sub-Strands" under those, and "Foundations" at the bottom:
   → Domain = domain, Strand = strand, Sub-Strand = sub_strand, Foundation = indicator
@@ -164,6 +176,8 @@ EXAMPLES OF LABEL-TO-LEVEL MAPPING (these are illustrative, not exhaustive):
   → Area = domain, Goal = strand, Objective = indicator (no sub_strand)
 - A document labels top sections as "Domains" with "Standards" directly containing "Indicators":
   → Domain = domain, Standard = sub_strand (no strand), Indicator = indicator
+- A document has a developmental area (e.g., "Social Emotional Development"), then "Strands" (e.g., "Self-Awareness and Emotional Skills"), then "Concepts" (e.g., "Self-Awareness"), then a learning goal statement (e.g., "The child demonstrates an awareness of self.") followed by lettered examples (a, b, c...):
+  → Developmental area = domain, Strand = strand, Concept = sub_strand, Learning goal statement = indicator. The lettered examples are NOT indicators — they are illustrative examples and should be excluded or folded into the indicator description.
 
 CRITICAL — SIDE-BY-SIDE AGE-GROUP OUTCOMES ARE SEPARATE INDICATORS:
 Some documents present outcomes for different age groups (e.g., PK3 and PK4, "Early (3 to 4 ½ Years)", "Later (4 to 5 ½ Years)", "By 36 months", "By 48 months") in side-by-side table columns. Each column represents a DISTINCT indicator and MUST be extracted as its own separate element. Do NOT merge them into a single indicator.
@@ -177,7 +191,7 @@ These are NOT the same indicator. They have different codes, different titles, a
 FIELD INSTRUCTIONS:
 - "level": One of "domain", "strand", "sub_strand", or "indicator".
 - "code": The code or number from the document (e.g., "1.0", "1.1", "ATL"). If the document does not assign a code, assign an appropriate one.
-- "title": The exact title as written in the document. Only shorten it if it has redundent leading/trailing text like "STRAND" or "DOMAIN"
+- "title": The exact title as written in the document. Only shorten it if it has redundent leading/trailing text like "STRAND" or "DOMAIN". IMPORTANT: Strip age-band pre-text labels from indicator titles. Remove prefixes like "Early (3 to 4 ½ Years)", "Later (4 to 5 ½ Years)", "By 36 months", "By 48 months", "Younger Toddler", "Older Toddler", "PK3", "PK4", etc. The title should be the actual name of the indicator, not the age-band label. For example, if the document shows "Early (3 to 4 ½ Years)" as a label above the indicator text "Curiosity and Interest", the title should be "Curiosity and Interest", NOT "Early (3 to 4 ½ Years)". The age-band information should go into the age_band field instead.
 - "description": The full descriptive text associated with this element, including any age-band details. Combine all age-specific text into one description. If there is no description beyond the title, use an empty string "".
 - "confidence": A float between 0.0 and 1.0 reflecting how certain you are about the classification:
   - 0.95+ : Nesting position is unambiguous and the element clearly maps to this level.
