@@ -3,14 +3,13 @@ name: Deploy to AWS
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 
 env:
-  AWS_REGION: us-east-1
-  PYTHON_VERSION: "3.9"
+  PYTHON_VERSION: "3.11"
 
 jobs:
   test:
@@ -39,11 +38,12 @@ jobs:
       - name: Run integration tests
         run: pytest tests/integration -v
 
-  deploy:
-    name: Deploy to AWS
+  deploy-dev:
+    name: Deploy to Dev
     runs-on: ubuntu-latest
     needs: test
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.event_name == 'push'
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -54,17 +54,17 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build package
+      - name: Package Lambda functions
         run: |
-          python -m pip install --upgrade pip build
-          python -m build
+          chmod +x scripts/package_lambda.sh
+          ENVIRONMENT=${{ secrets.ENVIRONMENT_NAME }} AWS_REGION=${{ secrets.AWS_REGION }} bash scripts/package_lambda.sh
 
       - name: Deploy CloudFormation stack
         run: |
@@ -73,30 +73,135 @@ jobs:
             --stack-name els-pipeline-${{ secrets.ENVIRONMENT_NAME }} \
             --parameter-overrides \
               EnvironmentName=${{ secrets.ENVIRONMENT_NAME }} \
-              Region=${{ env.AWS_REGION }} \
+              Region=${{ secrets.AWS_REGION }} \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
-      - name: Get stack outputs
-        id: stack-outputs
+      - name: Update Lambda function code
         run: |
-          RAW_BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name els-pipeline-${{ secrets.ENVIRONMENT_NAME }} \
-            --query 'Stacks[0].Outputs[?OutputKey==`RawDocumentsBucketName`].OutputValue' \
-            --output text)
-          echo "raw_bucket=$RAW_BUCKET" >> $GITHUB_OUTPUT
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          LAMBDA_BUCKET="els-lambda-code-${{ secrets.ENVIRONMENT_NAME }}-${AWS_ACCOUNT_ID}"
 
-      - name: Upload package to S3 (optional)
-        run: |
-          aws s3 cp dist/ s3://els-pipeline-artifacts-${{ secrets.ENVIRONMENT_NAME }}/ \
-            --recursive \
-            --exclude "*" \
-            --include "*.whl" \
-            --include "*.tar.gz" || echo "Artifacts bucket not configured, skipping upload"
+          FUNCTIONS=(
+            "els-ingester-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-text-extractor-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-structure-detector-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-hierarchy-parser-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-validator-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-persistence-${{ secrets.ENVIRONMENT_NAME }}"
+          )
+
+          for func in "${FUNCTIONS[@]}"; do
+            echo "Updating $func..."
+            aws lambda update-function-code \
+              --function-name "$func" \
+              --s3-bucket "$LAMBDA_BUCKET" \
+              --s3-key "els-lambda-package.zip" \
+              --output json > /dev/null
+          done
 
       - name: Deployment summary
         run: |
-          echo "✅ Deployment completed successfully!"
+          STACK_NAME="els-pipeline-${{ secrets.ENVIRONMENT_NAME }}"
+          RAW_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`RawDocumentsBucketName`].OutputValue' \
+            --output text)
+          PROCESSED_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`ProcessedJsonBucketName`].OutputValue' \
+            --output text)
+          STATE_MACHINE=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`PipelineStateMachineArn`].OutputValue' \
+            --output text)
+          echo "✅ Dev deployment completed successfully!"
           echo "Environment: ${{ secrets.ENVIRONMENT_NAME }}"
-          echo "Region: ${{ env.AWS_REGION }}"
-          echo "Raw Documents Bucket: ${{ steps.stack-outputs.outputs.raw_bucket }}"
+          echo "Region: ${{ secrets.AWS_REGION }}"
+          echo "Raw Documents Bucket: $RAW_BUCKET"
+          echo "Processed JSON Bucket: $PROCESSED_BUCKET"
+          echo "State Machine: $STATE_MACHINE"
+
+  deploy-prod:
+    name: Deploy to Prod
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    if: github.event_name == 'push'
+    environment: prod
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Package Lambda functions
+        run: |
+          chmod +x scripts/package_lambda.sh
+          ENVIRONMENT=${{ secrets.ENVIRONMENT_NAME }} AWS_REGION=${{ secrets.AWS_REGION }} bash scripts/package_lambda.sh
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/template.yaml \
+            --stack-name els-pipeline-${{ secrets.ENVIRONMENT_NAME }} \
+            --parameter-overrides \
+              EnvironmentName=${{ secrets.ENVIRONMENT_NAME }} \
+              Region=${{ secrets.AWS_REGION }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+
+      - name: Update Lambda function code
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          LAMBDA_BUCKET="els-lambda-code-${{ secrets.ENVIRONMENT_NAME }}-${AWS_ACCOUNT_ID}"
+
+          FUNCTIONS=(
+            "els-ingester-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-text-extractor-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-structure-detector-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-hierarchy-parser-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-validator-${{ secrets.ENVIRONMENT_NAME }}"
+            "els-persistence-${{ secrets.ENVIRONMENT_NAME }}"
+          )
+
+          for func in "${FUNCTIONS[@]}"; do
+            echo "Updating $func..."
+            aws lambda update-function-code \
+              --function-name "$func" \
+              --s3-bucket "$LAMBDA_BUCKET" \
+              --s3-key "els-lambda-package.zip" \
+              --output json > /dev/null
+          done
+
+      - name: Deployment summary
+        run: |
+          STACK_NAME="els-pipeline-${{ secrets.ENVIRONMENT_NAME }}"
+          RAW_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`RawDocumentsBucketName`].OutputValue' \
+            --output text)
+          PROCESSED_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`ProcessedJsonBucketName`].OutputValue' \
+            --output text)
+          STATE_MACHINE=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].Outputs[?OutputKey==`PipelineStateMachineArn`].OutputValue' \
+            --output text)
+          echo "✅ Prod deployment completed successfully!"
+          echo "Environment: ${{ secrets.ENVIRONMENT_NAME }}"
+          echo "Region: ${{ secrets.AWS_REGION }}"
+          echo "Raw Documents Bucket: $RAW_BUCKET"
+          echo "Processed JSON Bucket: $PROCESSED_BUCKET"
+          echo "State Machine: $STATE_MACHINE"
