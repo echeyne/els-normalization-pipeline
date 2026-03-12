@@ -130,6 +130,7 @@ Key environment variables (see `.env.example` for the full list):
 | `BEDROCK_EMBEDDING_MODEL_ID`    | Bedrock model for embeddings              | `amazon.titan-embed-text-v2:0`    |
 | `CONFIDENCE_THRESHOLD`          | Min confidence before flagging for review | `0.7`                             |
 | `DB_HOST`                       | Aurora PostgreSQL endpoint                | `localhost`                       |
+| `DESCOPE_PROJECT_ID`            | Descope project ID for API authentication | —                                 |
 
 ## Documentation
 
