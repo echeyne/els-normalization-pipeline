@@ -43,6 +43,10 @@ htmlcov/
 *.swo
 *~
 
+# Node.js
+node_modules/
+.turbo/
+
 # OS
 .DS_Store
 Thumbs.db
