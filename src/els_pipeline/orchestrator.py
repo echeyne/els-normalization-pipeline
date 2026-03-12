@@ -21,9 +21,25 @@ from .config import Config
 
 logger = logging.getLogger(__name__)
 
-# Initialize AWS clients
-stepfunctions_client = boto3.client('stepfunctions')
-s3_client = boto3.client('s3')
+# Lazy-initialized AWS clients (initialized on first use to avoid import-time boto3 calls)
+_stepfunctions_client = None
+_s3_client = None
+
+
+def _get_stepfunctions_client():
+    """Get or create Step Functions client."""
+    global _stepfunctions_client
+    if _stepfunctions_client is None:
+        _stepfunctions_client = boto3.client('stepfunctions', region_name=Config.AWS_REGION)
+    return _stepfunctions_client
+
+
+def _get_s3_client():
+    """Get or create S3 client."""
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client('s3', region_name=Config.AWS_REGION)
+    return _s3_client
 
 
 def start_pipeline(
@@ -87,7 +103,7 @@ def start_pipeline(
     
     try:
         # Start Step Functions execution
-        response = stepfunctions_client.start_execution(
+        response = _get_stepfunctions_client().start_execution(
             stateMachineArn=state_machine_arn,
             name=run_id,
             input=json.dumps(execution_input)
@@ -194,7 +210,7 @@ def rerun_stage(
         # Start the stage execution
         # Note: In a real implementation, this would invoke a specific Lambda
         # or use a Step Functions feature to run a single state
-        response = stepfunctions_client.start_execution(
+        response = _get_stepfunctions_client().start_execution(
             stateMachineArn=state_machine_arn,
             name=rerun_id,
             input=json.dumps({
@@ -303,7 +319,7 @@ def _get_execution_arn(run_id: str, state_machine_arn: str) -> Optional[str]:
     """
     try:
         # List executions for the state machine
-        response = stepfunctions_client.list_executions(
+        response = _get_stepfunctions_client().list_executions(
             stateMachineArn=state_machine_arn,
             maxResults=100
         )
@@ -332,7 +348,7 @@ def _parse_execution_history(execution_arn: str) -> Dict[str, Any]:
     """
     try:
         # Get execution history
-        response = stepfunctions_client.get_execution_history(
+        response = _get_stepfunctions_client().get_execution_history(
             executionArn=execution_arn,
             maxResults=1000,
             reverseOrder=False
