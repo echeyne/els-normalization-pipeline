@@ -348,7 +348,7 @@ def test_property_9_canonical_level_normalization(elements, country, state, year
     """
     fake = _mock_bedrock_generic(elements)
     with patch("els_pipeline.parser.call_bedrock_llm", return_value=fake):
-        result = parse_hierarchy(elements, country, state, year)
+        result = parse_hierarchy(elements, country, state, year, age_band="PK")
 
     for standard in result.standards:
         assert standard.domain is not None
@@ -373,7 +373,7 @@ def test_property_10_depth_based_hierarchy_mapping_2_levels(elements, country, s
     """
     fake = _mock_bedrock_two_level(elements)
     with patch("els_pipeline.parser.call_bedrock_llm", return_value=fake):
-        result = parse_hierarchy(elements, country, state, year)
+        result = parse_hierarchy(elements, country, state, year, age_band="PK")
 
     for standard in result.standards:
         assert standard.domain is not None
@@ -396,7 +396,7 @@ def test_property_10_depth_based_hierarchy_mapping_3_levels(elements, country, s
     """
     fake = _mock_bedrock_three_level(elements)
     with patch("els_pipeline.parser.call_bedrock_llm", return_value=fake):
-        result = parse_hierarchy(elements, country, state, year)
+        result = parse_hierarchy(elements, country, state, year, age_band="PK")
 
     for standard in result.standards:
         assert standard.domain is not None
@@ -419,7 +419,7 @@ def test_property_10_depth_based_hierarchy_mapping_4_levels(elements, country, s
     """
     fake = _mock_bedrock_four_level(elements)
     with patch("els_pipeline.parser.call_bedrock_llm", return_value=fake):
-        result = parse_hierarchy(elements, country, state, year)
+        result = parse_hierarchy(elements, country, state, year, age_band="PK")
 
     for standard in result.standards:
         assert standard.domain is not None
@@ -477,7 +477,7 @@ def test_property_12_no_orphaned_indicators(elements, country, state, year):
     """
     fake = _mock_bedrock_generic(elements)
     with patch("els_pipeline.parser.call_bedrock_llm", return_value=fake):
-        result = parse_hierarchy(elements, country, state, year)
+        result = parse_hierarchy(elements, country, state, year, age_band="PK")
 
     for standard in result.standards:
         assert standard.domain is not None
@@ -516,7 +516,7 @@ def test_property_12_orphaned_indicators_without_domain(country, state, year):
 
     fake = json.dumps([])
     with patch("els_pipeline.parser.call_bedrock_llm", return_value=fake):
-        result = parse_hierarchy([orphan_indicator], country, state, year)
+        result = parse_hierarchy([orphan_indicator], country, state, year, age_band="PK")
 
     assert len(result.standards) == 0
 

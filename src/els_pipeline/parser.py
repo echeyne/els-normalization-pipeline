@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError
 
 from .models import (
     DetectedElement,
+    HierarchyLevelEnum,
     NormalizedStandard,
     ParseResult,
     HierarchyLevel,
@@ -142,7 +143,7 @@ def call_bedrock_llm(prompt: str, max_retries: int = MAX_BEDROCK_RETRIES) -> str
         "bedrock-runtime",
         region_name=Config.AWS_REGION,
         config=BotocoreConfig(
-            read_timeout=300,
+            read_timeout=600,
             connect_timeout=10,
             retries={"max_attempts": 0},
         ),
@@ -302,6 +303,43 @@ def parse_llm_response(
             continue
 
     return standards
+def chunk_elements_by_domain(
+    elements: List[DetectedElement],
+) -> List[List[DetectedElement]]:
+    """
+    Split elements into chunks grouped by domain for parallel LLM calls.
+
+    Each chunk contains one domain element and all of its descendant strands,
+    sub_strands, and indicators (determined by document order: every element
+    after a domain up to the next domain belongs to that domain).
+
+    If the input contains no domain-level elements the full list is returned
+    as a single chunk so the LLM can still attempt resolution.
+
+    Returns:
+        List of element groups, one per domain.
+    """
+    if not elements:
+        return []
+
+    chunks: List[List[DetectedElement]] = []
+    current_chunk: List[DetectedElement] = []
+
+    for el in elements:
+        if el.level == HierarchyLevelEnum.DOMAIN and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = []
+        current_chunk.append(el)
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # If we ended up with zero domain-headed chunks (no domain elements at
+    # all), return the whole list as one chunk.
+    if not chunks:
+        return [elements]
+
+    return chunks
 
 
 def parse_hierarchy(
@@ -314,8 +352,9 @@ def parse_hierarchy(
     """
     Parse detected elements into normalized standards using an LLM.
 
-    Filters out needs_review elements, validates the remaining list, then
-    delegates hierarchy resolution to Amazon Bedrock (Claude).
+    Filters out needs_review elements, splits the remainder into per-domain
+    chunks, and calls the LLM once per chunk to stay within Bedrock timeout
+    limits.  Results from all chunks are merged into a single ParseResult.
 
     Args:
         elements: List of DetectedElement objects from the detector
@@ -340,42 +379,71 @@ def parse_hierarchy(
                 error="No valid elements to parse (all flagged for review or empty input)",
             )
 
-        # Build prompt and call LLM with JSON-parse retry loop
-        prompt = build_parsing_prompt(
-            valid_elements, country, state, version_year, age_band
+        # Split into per-domain chunks so each LLM call is small enough
+        chunks = chunk_elements_by_domain(valid_elements)
+        logger.info(
+            f"Split {len(valid_elements)} elements into {len(chunks)} domain chunk(s)"
         )
 
-        for parse_attempt in range(MAX_PARSE_RETRIES + 1):
-            try:
-                response_text = call_bedrock_llm(prompt)
-                standards = parse_llm_response(
-                    response_text, country, state, version_year, age_band
-                )
-                break
-            except (ValueError, json.JSONDecodeError) as e:
-                if parse_attempt < MAX_PARSE_RETRIES:
-                    logger.warning(
-                        f"JSON parse failed (attempt {parse_attempt + 1}/{MAX_PARSE_RETRIES + 1}): {e}"
+        all_standards: List[NormalizedStandard] = []
+        chunk_errors: List[str] = []
+
+        for chunk_idx, chunk in enumerate(chunks):
+            prompt = build_parsing_prompt(
+                chunk, country, state, version_year, age_band
+            )
+
+            parsed = False
+            for parse_attempt in range(MAX_PARSE_RETRIES + 1):
+                try:
+                    response_text = call_bedrock_llm(prompt)
+                    standards = parse_llm_response(
+                        response_text, country, state, version_year, age_band
                     )
-                    continue
-                else:
-                    logger.error(
-                        f"JSON parse failed after {MAX_PARSE_RETRIES + 1} attempts: {e}"
+                    all_standards.extend(standards)
+                    parsed = True
+                    logger.info(
+                        f"Chunk {chunk_idx + 1}/{len(chunks)}: "
+                        f"parsed {len(standards)} standards"
                     )
-                    return ParseResult(
-                        standards=[],
-                        indicators=[],
-                        orphaned_elements=elements,
-                        status=StatusEnum.ERROR.value,
-                        error=f"Failed to parse LLM response after {MAX_PARSE_RETRIES + 1} attempts: {e}",
-                    )
+                    break
+                except (ValueError, json.JSONDecodeError) as e:
+                    if parse_attempt < MAX_PARSE_RETRIES:
+                        logger.warning(
+                            f"Chunk {chunk_idx + 1} JSON parse failed "
+                            f"(attempt {parse_attempt + 1}/{MAX_PARSE_RETRIES + 1}): {e}"
+                        )
+                        continue
+                    else:
+                        msg = (
+                            f"Chunk {chunk_idx + 1} failed after "
+                            f"{MAX_PARSE_RETRIES + 1} attempts: {e}"
+                        )
+                        logger.error(msg)
+                        chunk_errors.append(msg)
+
+        # Determine overall status
+        if not all_standards and chunk_errors:
+            return ParseResult(
+                standards=[],
+                indicators=[],
+                orphaned_elements=elements,
+                status=StatusEnum.ERROR.value,
+                error="; ".join(chunk_errors),
+            )
+
+        status = StatusEnum.SUCCESS.value
+        error = None
+        if chunk_errors:
+            status = StatusEnum.PARTIAL.value
+            error = "; ".join(chunk_errors)
 
         return ParseResult(
-            standards=standards,
-            indicators=[s.model_dump() for s in standards],
+            standards=all_standards,
+            indicators=[s.model_dump() for s in all_standards],
             orphaned_elements=[],
-            status=StatusEnum.SUCCESS.value,
-            error=None,
+            status=status,
+            error=error,
         )
 
     except Exception as e:
