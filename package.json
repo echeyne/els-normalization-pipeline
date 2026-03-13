@@ -9,6 +9,7 @@
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
+    "esbuild": "^0.27.4",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0"
   },
